@@ -1,0 +1,297 @@
+\section{Notation and the objectives we must keep separate}
+\begin{longtable}{p{0.21\linewidth}p{0.70\linewidth}}
+\toprule Symbol & Meaning \\
+\midrule\endhead
+$q$ & Problem or prompt drawn from a task distribution \\
+$s_t$, $h_t$ & Reasoning step and prefix $h_t=(q,s_1,\ldots,s_t)$ \\
+$\tau$, $T$ & Complete trajectory and number of reasoning steps \\
+$\pi_\theta$, $\pi_0$ & Policy being optimized and fixed reference policy \\
+$z_t$ & State before action $a_t$; in text, the prompt and current prefix \\
+$c_t$, $v_t$ & Local step-correctness and cumulative prefix-validity labels \\
+$p_{\pi_c}(h_t)$ & Probability a fixed completer $\pi_c$ finishes correctly \\
+$\hat r_\phi$, $r^*$ & Learned process reward and specified target process reward \\
+$G$ & Explicit step-to-trajectory aggregation rule \\
+$\hat R$, $R^*$ & Proxy trajectory reward and intended task utility \\
+$\U$, $L$, $U$ & Reward uncertainty set and its lower and upper envelopes \\
+$b$, $\alpha$, $\delta$ & Width; prediction miscoverage level; confidence-set failure probability \\
+$\rho$, $\beta$ & Ambiguity-set radius and policy KL regularization coefficient \\
+\bottomrule
+\end{longtable}
+
+\textbf{Critical distinction.} In general,
+\[
+ c_t\ne v_t\ne p_{\pi_c}(h_t),\qquad
+ G(r^*(h_1),\ldots,r^*(h_T))\ne R^*(\tau).
+\]
+A valid algebraic manipulation can follow an earlier false assumption; a wrong
+step can later be repaired; a correct prefix can be difficult for a weak model
+to complete. Even perfectly estimating step correctness does not automatically
+make an arbitrary aggregation equal final-answer accuracy.
+
+\section{Reinforcement learning in the reasoning setting}
+\subsection{MDPs, states, actions, and policies}
+A finite-horizon Markov decision process specifies states, actions, transition
+probabilities, rewards, an initial-state distribution, and a horizon. The Markov
+property says that, conditional on the current state and action, the next-state
+distribution does not additionally depend on earlier history:
+\[
+ \Prob(z_{t+1}\mid z_{0:t},a_{0:t})
+ =P(z_{t+1}\mid z_t,a_t).
+\]
+It does not mean only the immediately preceding observation matters: the state
+can encode the entire history. Text generation is Markov when the state includes
+the full prompt and generated prefix. An action can be one token, one reasoning
+step, or a tool call. Appending text is deterministic given the action; sampling
+actions from the policy is stochastic. Tool environments may also have stochastic
+or hidden state. A partially observable formulation is needed when observations
+do not determine the environment state.
+
+A stochastic policy maps a state to an action distribution. A deterministic
+policy picks one action. A stationary policy depends on the current state, and
+a nonstationary one may also depend on time. Time can be appended to the state
+in a finite-horizon problem. Existence of stationary deterministic optima requires
+the usual MDP conditions and objective; do not assert it for arbitrary partial
+observability or nonlinear robust objectives.
+
+\subsection{Returns, value, and credit assignment}
+Use the convention that $r_t$ is earned by action $a_t$:
+\[
+ G_t^{\mathrm{sum}}=\sum_{k=t}^{T-1}\gamma^{k-t}r_k,
+ \quad V^\pi(z)=\E_\pi[G_t^{\mathrm{sum}}\mid z_t=z],
+ \quad Q^\pi(z,a)=\E_\pi[G_t^{\mathrm{sum}}\mid z_t=z,a_t=a].
+\]
+The advantage $A^\pi(z,a)=Q^\pi(z,a)-V^\pi(z)$ measures whether an action is
+better than the policy's average action. For additive returns,
+\[
+ Q^\pi(z,a)=\E[r_t+\gamma V^\pi(z_{t+1})\mid z_t=z,a_t=a].
+\]
+Sparse terminal rewards make it hard to determine which earlier decisions
+caused success. Dense process feedback may help, but repeated erroneous rewards
+also accumulate. The classical Monte Carlo, temporal-difference, value-learning,
+and actor--critic vocabulary is useful background; these notes use a finite
+episodic reasoning model rather than reproduce all tabular algorithms. The
+textbook is a background reference \cite{sutton}.
+
+\subsection{Policy gradients, PPO, and GRPO}
+For a fixed trajectory reward, the likelihood-ratio identity gives
+\[
+ \nabla_\theta\E_{\tau\sim\pi_\theta}[R(\tau)]
+ =\E\left[R(\tau)\sum_t\nabla_\theta\log\pi_\theta(a_t\mid z_t)\right].
+\]
+Baselines reduce variance; return-to-go or advantage estimates improve credit
+assignment. A critic estimates value; it is a separate source of approximation
+error from the reward model.
+
+PPO commonly uses the clipped surrogate \cite{ppo}
+\[
+ \E_t\left[\min\{\omega_t(\theta)\hat A_t,
+ \clip(\omega_t(\theta),1-\epsilon,1+\epsilon)\hat A_t\}\right],
+ \quad \omega_t(\theta)=\frac{\pi_\theta(a_t\mid z_t)}{\pi_{\rm old}(a_t\mid z_t)}.
+\]
+Clipping limits this surrogate's incentive for large individual updates; it is
+not a hard guarantee that policy KL remains small. The policy can still move
+far from its reference through many small updates.
+
+GRPO estimates relative advantages from groups of sampled answers, avoiding a
+separately learned value critic in its common formulation \cite{deepseekmath}.
+A simple outcome-level version uses
+\[
+ \hat A_j=\frac{R_j-\bar R}{\operatorname{std}(R_1,\ldots,R_m)+\varepsilon}.
+\]
+Dense process rewards require a stated token/step assignment; broadcasting one
+trajectory advantage to every token is not stepwise process credit assignment.
+Group normalization can obscure raw reward scales and gives little signal when
+all group rewards coincide. Document the actual variant in experiments.
+
+\subsection{RLHF, RLVR, and inference-time search}
+RLHF commonly trains a preference reward model and optimizes against it. RLVR
+uses automatically checked outcomes, such as answers or test results. The
+checker is only as reliable as its specification and implementation. PRMs can
+provide dense supervision in either setting. Best-of-$N$ changes which sampled
+trajectory is selected while keeping generator weights fixed:
+\[
+ \tau_{\rm sel}=\arg\max_{j\le N}\hat R(\tau_j),\quad \tau_j\sim\pi_0.
+\]
+Beam search additionally selects prefixes and changes the effective exploration
+distribution. RL changes generator parameters, allowing repeated adaptation to
+the reward's errors. Results in one regime need not transfer to another.
+
+\section{What a process reward model does}
+A discriminative PRM predicts correctness scores at step boundaries from the
+question and preceding reasoning. A generative PRM emits critiques or labels.
+Conditioning on preceding steps is common; ``stepwise'' does not mean the model
+ignores all previous context. The reward head may output a logit, a probability,
+or a free scalar. The domain and scale determine admissible uncertainty sets.
+
+\subsection{Labels and training}
+For binary labels, a standard loss is
+\[
+ \ell_{\rm BCE}(\phi;h_t,y_t)
+ =-y_t\log\hat r_\phi(h_t)-(1-y_t)\log(1-\hat r_\phi(h_t)).
+\]
+Human annotation may stop at the first error. Later steps then have missing or
+censored labels; treating them all as independently labeled local errors changes
+the target. Automated judges introduce correlated annotation mistakes.
+
+For $K$ independent completions under a fixed completer $\pi_c$,
+\[
+ \tilde p(h_t)=\frac1K\sum_{k=1}^K\ind\{\text{completion }k\text{ succeeds}\},
+ \quad \Var(\tilde p\mid h_t)=\frac{p_{\pi_c}(1-p_{\pi_c})}{K}.
+\]
+A label for ``at least one success'' has mean $1-(1-p_{\pi_c})^K$, not
+$p_{\pi_c}$. It changes with $K$ and can approach one for any nonzero success
+probability. Model repair makes completion success different from correctness
+of the present step. Thus Monte Carlo uncertainty and semantic label mismatch
+are distinct problems.
+
+\subsection{Aggregation creates additional incentives}
+For probability-like scores $r_t\in[0,1]$, common choices are
+\[
+ G_{\rm sum}=\sum_t r_t,\quad G_{\rm mean}=T^{-1}\sum_t r_t,
+ \quad G_{\rm min}=\min_t r_t,\quad G_{\rm prod}=\prod_t r_t.
+\]
+Sum rewards repetition of easy steps. Mean can dilute a bad step with easy ones.
+Minimum emphasizes the weakest step but can reward short or vacuous responses
+and rejects repair unless repair is explicitly modeled. Product penalizes length:
+$0.95^{10}\approx0.60$ and $0.95^{30}\approx0.21$. It is a joint-correctness
+probability only under an appropriate probabilistic interpretation; multiplying
+ordinary marginal step scores does not justify an independence claim.
+
+For bounded per-step perturbations $|r_t-\tilde r_t|\le\epsilon$, sum errors can
+grow as $T\epsilon$, while minimum errors are bounded by $\epsilon$. This
+deterministic observation concerns the aggregation target, not proof that
+minimum rewards optimize true mathematical accuracy. Splitting or merging steps
+can change all four scores. Include segmentation attacks and empty-output rules.
+
+\section{Why reward hacking occurs and why it matters}
+Write $\hat R(\tau)=R^*(\tau)+e(\tau)$ schematically. Maximizing $\hat R$
+selects both genuine quality and positive error. Error on ordinary data is not
+the same as error among the candidates chosen by the optimizer.
+
+\subsection{A numerical example}
+Suppose a correct solution scores $0.80$ while an incorrect fluent solution
+scores $0.95$. A policy increasing the latter's probability improves proxy
+reward and reduces correctness. A useful tube might give the correct solution
+$[0.76,0.84]$ and the exploitable solution $[0.20,1.00]$, making pessimistic
+selection prefer the correct solution. If both intervals are too narrow, or the
+wrong solution's uncertainty is underestimated, this defense fails. If every
+interval is $[0,1]$, the lower score gives no useful ranking.
+
+\subsection{Different mechanisms need different diagnostics}
+\begin{itemize}
+\item \textbf{Selection of noise:} higher search budgets find larger positive
+errors even without new policy weights.
+\item \textbf{Distribution shift:} optimization visits reasoning prefixes absent
+from training, where feature--correctness associations fail.
+\item \textbf{Misspecification:} a scorer rewards length, style, or easy local
+claims instead of the intended reasoning property.
+\item \textbf{Objective mismatch:} perfectly estimated local rewards are summed
+or transformed into a trajectory objective that rewards the wrong behavior.
+\item \textbf{Evaluator manipulation:} delimiters, injected instructions, or
+checker loopholes change what the evaluator measures.
+\end{itemize}
+Optimization does not require conscious intent to exploit a reward. Conversely,
+an ordinary wrong answer is not by itself evidence of hacking. Look for reward
+improvement coupled to independent quality stagnation or decline and a mechanism
+that explains it. Hacking harms model quality, invalidates capability estimates,
+wastes compute, and can train persistent undesirable behavior.
+
+\section{Uncertainty, calibration, and coverage}
+\subsection{Three kinds of uncertainty}
+\textbf{Epistemic uncertainty} concerns limited knowledge of the target reward
+function. \textbf{Aleatoric variability} concerns stochastic outcomes or ambiguous
+labels given the input. \textbf{Misspecification} means the model class or label
+definition systematically misses relevant truth. Ensemble variance may detect
+the first while missing the third. Rollout variance primarily measures outcome
+variability and finite-sample noise, not intrinsic logical ambiguity.
+
+\subsection{Prediction intervals are not confidence bands for a function}
+An interval covering a new binary label is a prediction set for $Y$. A confidence
+interval for $p(x)=\Prob(Y=1\mid X=x)$ covers a conditional mean. A function
+confidence set asserts simultaneous containment of $p$ over a domain. They
+require different information and assumptions. A binary-label interval that
+contains both zero and one is valid but gives little reward discrimination.
+Quantiles of observed labels or rollout estimates do not automatically become
+confidence bounds on intrinsic correctness probabilities.
+
+Calibration of a probability score $\mu$ means that among examples assigned a
+score near $u$, the event frequency is near $u$. This is distribution-dependent.
+Low aggregate expected calibration error can coexist with poor accuracy on
+rare high-scoring mistakes. Ranking accuracy and calibration are also different.
+
+Marginal coverage is
+\[
+ \Prob\{Y_{\rm new}\in C(X_{\rm new})\}\ge1-\alpha.
+\]
+Trajectory coverage contains all relevant steps. Candidate-set coverage contains
+all trajectories being searched. Selection coverage concerns the chosen one.
+Function-level coverage contains the target reward on every point of a stated
+domain. Repeated RL adaptation requires an event valid for all encountered
+queries or a sequentially justified update procedure; a static marginal claim
+does not provide it.
+
+\section{Robust optimization: the geometry matters}
+For $\hat r:\mathcal H\to[0,1]$, a pointwise box tube is
+\[
+ \U_{\rm box}=\{r: |r(h)-\hat r(h)|\le b(h),\ h\in\mathcal H\}.
+\]
+It allows each point's error to vary independently. A function set induced by
+one uncertain parameter $w$ couples different prefixes. An adversary choosing
+one reward function for the entire policy gives
+\[
+ \max_\pi\inf_{r\in\U}\E_{\tau\sim\pi}[G(r(h_1),\ldots,r(h_T))].
+\]
+An adversary choosing a different model after each trajectory gives
+\[
+ \max_\pi\E_{\tau\sim\pi}\left[\inf_{r\in\U}G(r(h_1),\ldots,r(h_T))\right].
+\]
+Generally the second is no larger than the first. They can coincide for certain
+rectangular sets but need not for coupled sets. State explicitly which is solved.
+
+Distributional robustness instead permits an adversary to change a distribution.
+For robust training this might be
+\[
+ \min_\phi\sup_{Q\in\mathcal Q}\E_Q[\ell_{\rm PRM}(\phi;h,Y)].
+\]
+It changes the fitted model, whereas policy pessimism changes how a fixed model
+is used. Statistical DRO over examples, DRO over uncertain reward values, and
+robust control over functions should not share one undifferentiated symbol.
+
+\section{Distribution movement and reward shaping}
+For $\gamma<1$, define normalized discounted occupancy
+\[
+ d_\pi(z,a)=(1-\gamma)\E_\pi\sum_{t\ge0}\gamma^t
+ \ind\{z_t=z,a_t=a\}.
+\]
+Additive expected return is $(1-\gamma)^{-1}\langle d_\pi,r\rangle$.
+For finite-horizon reasoning with $\gamma=1$, use the finite sum of state-action
+visitation measures instead. Policy action KL, trajectory KL, and occupancy
+divergence are different quantities. Under shared dynamics, trajectory KL can
+be expressed as the expected sum of conditional action KLs, but an empirically
+averaged token KL still needs normalization and sampling conventions.
+
+An error bound averaged under $d_{\pi_0}$ may be amplified under $d_\pi$.
+Importance weighting requires $d_\pi\ll d_{\pi_0}$ and a usable density ratio;
+theoretical support overlap can be practically useless if weights are enormous.
+
+With a reliable base task reward, potential shaping uses
+\[
+ F_t=\gamma\Phi(z_{t+1})-\Phi(z_t).
+\]
+The discounted sum telescopes:
+\[
+ \sum_{t=0}^{T-1}\gamma^tF_t=-\Phi(z_0)+\gamma^T\Phi(z_T).
+\]
+Setting the terminal potential to zero removes dependence on chosen actions
+\cite{shaping}. Fix the potential during each evaluated episode and handle
+truncation explicitly. Arbitrary dense PRM bonuses, adaptive within-episode
+potentials, or nonzero length-dependent terminal potentials do not inherit this
+argument.
+
+\section{Research habits that make the results interpretable}
+Fix the target and label protocol before selecting an uncertainty estimator.
+Split data by problem, retain independent calibration and evaluation sets, and
+keep attack construction separate from final transfer tests. Report correctness,
+process validity, uncertainty coverage, computational cost, and reward curves.
+An uncertain reward estimator cannot establish its own success merely by giving
+higher scores. The detailed experiment plan and decision rules follow in Part III.

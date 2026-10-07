@@ -1,0 +1,1323 @@
+\section{Most recent impactful developments}
+This section prioritizes recent work with direct implications for our reward-tube project.
+The ordering reflects relevance to our research question rather than a bibliometric
+ranking; recent preprints are distinguished from conference publications in their entries.
+
+\subsection{Research question and shared notation}
+\label{sec:review}
+\textbf{Question.} Can a calibrated, structured uncertainty set around a process
+reward model (PRM) reduce reward hacking under inference-time search or
+reinforcement learning, while retaining useful discrimination between reasoning paths?
+We compare with existing pessimistic methods at matched compute, annotation budget,
+aggregation, and policy movement.
+
+This review was expanded on October 7, 2026. Each entry gives the mathematical
+object being modeled, important conditions or empirical limitations, and a concrete
+connection to our project. Equations use consistent notation rather than always
+reproducing the paper's symbols. Source section/equation pointers refer to the
+specified version where given; numbering may change in later revisions. A
+\emph{schematic} objective describes a method's structure rather than an exact
+implementation. Statements introduced as \emph{our interpretation}, \emph{our
+diagnostic}, or \emph{our extension} are research synthesis, not the authors' results.
+We inspected relevant method and theory sections; this is not a complete proof audit
+or a reproduction of the empirical findings.
+
+\subsubsection{Shared notation}
+Let $x$ be a problem, $a_t$ a reasoning step, $h_t=(x,a_{1:t})$ its prefix,
+and $\tau=(a_1,\ldots,a_T)$ a trajectory. Write $\hat r(h_t)$ for a learned
+process score and $G(\hat{\bm r}(\tau))$ for its trajectory aggregation.
+Intrinsic step validity, validity of the maintained reasoning state, and
+\[
+ p_{\pi_c}(h_t)=\Prob_{\pi_c}\{\text{correct final answer}\mid h_t\}
+\]
+are distinct targets; $\pi_c$ is a specified continuation policy. For additive
+rewards, $J_r(\pi)$ denotes expected return. When using normalized discounted
+occupancies, $d_\pi$ is a probability distribution and $J_r(\pi)=\E_{d_\pi}r$.
+Set $\Delta J_r=J_r(\pi)-J_r(\pi_0)$ for a reference policy $\pi_0$.
+Two recurring losses are
+\[
+ \ell_{\rm BCE}(y,p)=-y\log p-(1-y)\log(1-p),\qquad
+ \rho_\beta(u)=u\bigl(\beta-\ind\{u<0\}\bigr).
+\]
+The second is the pinball loss for a $\beta$-quantile. A prediction interval
+covers a future observed label; a function confidence set aims to contain one
+unknown reward function. Neither term should substitute for the other.
+
+\subsection{Uncertainty modeling and pessimistic reward optimization}
+
+\paper{Ma et al., Distributional PRMs via Conditional Optimal Transport (2026; arXiv v1)}{
+\textbf{Model.} PRM features condition a one-dimensional OT map. Convex
+potentials parameterized by partially input-convex networks give
+\[
+ T_\theta(u,h)=\partial_u g_\theta(u,h),\qquad
+ T_\theta(\cdot,h)_\#\mu_h\approx\nu_h.
+\]
+Here $\nu_h$ models rollout-success targets. The conditional dual optimization
+trains the potentials; a resulting quantile function $Q_\theta(\beta\mid h)$
+can be queried at arbitrary levels \cite{otprm}.
+
+\textbf{Mathematical detail.} Convexity makes the transport map nondecreasing,
+avoiding quantile crossing. For a general continuous source CDF $F_{\mu_h}$,
+standard OT quantile extraction is
+$Q_{\nu_h}(\beta)=T(F_{\mu_h}^{-1}(\beta),h)$; $T(\beta,h)$ itself is a
+quantile only with the corresponding uniform-source parameterization.
+Monotonicity is a structural property, not a finite-sample coverage theorem.
+
+\textbf{Evidence and connection.} The paper reports calibration and adaptive
+budget improvements using empirical completion-success labels. Keep its
+calibration/evaluation split explicit. Our extension needs joint process
+uncertainty, calibrated model discrepancy, or post-selection assurance; learning
+a flexible distribution or monotone quantiles is already this paper's contribution.
+Changing the completer changes its target.}
+
+\paper{Yu et al., From Curiosity to Caution (ICLR 2026; arXiv v1)}{
+\textbf{Score and learning.} Random-network distillation fits predictor
+$P_\theta$ to fixed target features $T$ on reference responses. At inference,
+\[
+ \alpha(x,y)=\norm{P_\theta(x,y)-T(x,y)}^2,
+ \quad r_{\rm caution}=\hat r-\lambda\alpha,
+ \quad \hat i=\arg\max_{i\leq N}r_{\rm caution}(x,y_i).
+\]
+Section 2.3 gives a stylized linear-reward/RND analysis whose informal theorem
+states a reward gain of order $\sqrt{\log N}$ over ordinary BoN under the stated
+sampling and network conditions \cite{caution}.
+
+\textbf{Conditions and evidence.} The theory is a proof of concept under
+strong distribution/feature assumptions, not a theorem for arbitrary LLMs.
+The penalty measures reference novelty: unusual valid reasoning may be penalized,
+and familiar invalid reasoning can evade it. Predictor training needs unlabelled
+reference responses; scoring requires extra network passes.
+
+\textbf{Connection.} An important low-cost uncertainty comparator. Check whether
+calibrated residual uncertainty improves on novelty alone, at matched generation
+and scoring cost. The name ``LCB'' does not establish calibrated reward-error
+coverage in the actual PRM setting.}
+
+\paper{Hahami et al., A Unifying Lens on Reward Uncertainty (2026; arXiv v1)}{
+\textbf{Variational formula.} For believed reward distribution $P$, a
+KL-penalized reward adversary gives
+\[
+ r_{\rm eff}=\inf_Q\{\E_Q r+\eta\KL(Q\|P)\}
+ =-\eta\log\E_P e^{-r/\eta}.
+\]
+The optimizer exponentially tilts $P$ toward lower rewards. For a uniform
+ensemble, $r_{\rm eff}=-\eta\log[K^{-1}\sum_k e^{-r_k/\eta}]$; see Section 3
+\cite{unifying}.
+
+\textbf{Limits and assumptions.} Under suitable moments,
+$r_{\rm eff}=\E r-\Var(r)/(2\eta)+O(\eta^{-2})$ as $\eta\to\infty$;
+$\eta\downarrow0$ gives the essential minimum. The Gaussian expression is
+exact when $r$ really is Gaussian. Exponential moments must exist. Reward
+adversary temperature $\eta$ and policy KL coefficient have different roles,
+even if a particular formulation sets them equal. A hard-radius KL ball instead
+requires optimizing a dual multiplier.
+
+\textbf{Connection.} Mean, minimum, and variance penalties already share an
+entropic formulation. Our extension should model a \emph{joint} step-reward
+law and its calibration, rather than rediscover scalar log-sum-exp pessimism.
+An incorrect believed distribution remains incorrect after robust tilting.}
+
+\paper{Zhou et al., PRISM (ACL 2026)}{
+\textbf{Model and likelihood.} Frozen features feed Gaussian expert heads and
+a prompt-dependent router:
+\[
+ p(r\mid x,y)=\sum_{k=1}^{K}\omega_k(x)
+ \mathcal N(r;\mu_k(x,y),\sigma_k^2(x,y)).
+\]
+Stage 1 forms experts; Stage 2 freezes them and learns router weights. Its
+cross-expert preference likelihood averages
+$\Phi((\mu_k(y_+)-\mu_l(y_-))/\sqrt{\sigma_k^2(y_+)+\sigma_l^2(y_-)+\epsilon})$
+with weights $\omega_k\omega_l$, where $\Phi$ is the normal CDF; Section 3,
+Eqs. (8)--(10) \cite{prism}.
+
+\textbf{Conditions and interpretation.} Mixture structure represents preference
+heterogeneity and within-component dispersion. These components are not
+identified epistemic versus aleatoric uncertainty solely by their names; latent
+mixtures and approximate likelihoods need empirical validation. Gaussian
+reward differences use the model's independence convention.
+
+\textbf{Connection.} A rich-distribution comparator for preference rewards,
+not a certified process-verification method. Our extension could share latent
+expert weights across steps, creating coherent trajectory-level scenarios.
+Decide whether uncertainty concerns conflicting legitimate preferences or
+incorrect mathematical judgments; averaging them can obscure the target of
+the tube.}
+
+\paper{Duan et al., Bayesian Non-negative Reward Modeling / BNRM (2026; arXiv v1)}{
+\textbf{Generative model.} Local activations $z\geq0$ and a shared dictionary
+$\phi\geq0$ have Gamma priors, generate reward $r=z^\top\phi$, and define
+preference probability $\sigmoid(r_+-r_-)$. Weibull variational posteriors are
+fit using the regularized evidence objective
+\[
+ \E_q\log p(\mathcal D\mid z,\phi)
+ -\eta\KL(q(z)\|p(z))-\eta\KL(q(\phi)\|p(\phi)).
+\]
+See Section 4, Eqs. (5)--(9) \cite{bnrm}.
+
+\textbf{Conditions and evidence.} Nonnegative sparse factors encourage
+parts-based representations; they do not prove causal disentanglement or
+elimination of style bias. A variational posterior can underestimate uncertainty,
+and misspecification can persist across all factors. Preference rewards are
+identified through differences, so positivity alone is not a correctness
+certificate. Reported robustness gains concern the evaluated RLHF settings.
+
+\textbf{Connection.} A possible alternative to Gaussian heads or independent
+ensembles. A shared dictionary creates a natural source of correlated error
+across prefixes; local latent randomness and global uncertainty should be
+separated when constructing trajectory scenarios. Any posterior credible tube
+still needs independent coverage and optimization stress tests.}
+
+\subsection{Reward hacking diagnostics and adversarial defenses}
+
+\paper{Tiwari et al., Reward Under Attack (2026; arXiv v1)}{
+\textbf{Setup and attack objective.} The paper uses model-specific aggregation:
+Skywork's terminal score and Qwen's minimum step score. Adversarial probing seeks
+high-scoring token modifications; in our notation its attack target is
+\[
+ \max_{u\in\mathcal A}\ G(\hat{\bm r}(\tau\mathbin{\oplus}u)),
+\]
+subject to the attack's permitted placements and token budget. Static
+perturbations, gradient-based token optimization, and GRPO expose different
+failure mechanisms \cite{attack}.
+
+\textbf{Evidence and limits.} In the studied Skywork/AIME setting, reward
+approaches one while answer accuracy remains below 4\%. Qwen resists the
+particular gradient attack but collapses during RL to a vacuous introductory
+sentence. Therefore success against one attack is not general robustness.
+PRM-BiasBench tests controlled content and presentation changes.
+
+\textbf{Connection.} Optimize the \emph{deployed robust score}, not only the
+nominal PRM. Our diagnostic should report reward, independent correctness,
+claim count, length, and vacuity across pressure levels. Parser exploits and
+reward inflation require separate tests; a score tube that covers only
+mathematical steps may miss an output that avoids making any claim.}
+
+\paper{Juneja et al., Adversarial Training for PRMs / APRM (ICML 2026)}{
+\textbf{Game and objective.} A generator corrupts a reference step; a verifier
+predicts correctness $\hat y$, checked by an algorithmic oracle $y$.
+Verifier payoff is $r_R=2\ind\{y=\hat y\}-1$. Generator payoff is $+1$ for
+an incorrect accepted step, $0$ for an incorrect rejected step, and $-1$ for
+an uncorrupted correct step. Each player optimizes
+\[
+ U_i'=\E r_i-\tau\KL(\pi_i\|\pi_{i,0})+c_H H(\pi_i).
+\]
+The inspected preprint v1, Section 2, formulates a general-sum game
+\cite{aprm}.
+
+\textbf{Theoretical conditions.} Finite action spaces, continuity, and
+concavity conditions support equilibrium arguments in mixed-policy space.
+Own-player strong concavity is not by itself enough to make a general-sum
+pseudo-gradient strongly monotone; cross-player derivatives matter. Neural PPO
+optimization does not automatically inherit those policy-space properties.
+The oracle uses reference-based semantic/structural checks and has its own error modes.
+
+\textbf{Connection.} A strong hard-negative baseline and adversarial data source.
+Compare the same annotation budget spent on retraining versus tube construction;
+audit oracle mistakes before treating generated corruption labels as truth.}
+
+\paper{Pathmanathan and Huang, REFORM (ACL 2026; inspected arXiv v1)}{
+\textbf{Method and objective.} REFORM discovers preference-order reversals while
+attempting to preserve response quality. An aligned policy proposes top-$k$
+tokens and reward-guided decoding searches for low-scoring preferred responses;
+a misaligned policy searches for high-scoring nonpreferred responses.
+Failure-aware retraining minimizes Bradley--Terry loss,
+\[
+ \mathcal L_{\rm BT}=-\E\log\sigmoid\bigl(r_\phi(x,y_+)-r_\phi(x,y_-)\bigr),
+\]
+on original and discovered preference pairs \cite{reform}.
+
+\textbf{Conditions and evidence.} Section 3 substitutes a prefix reward for
+an intractable expected completion reward during controlled decoding. Policy
+likelihood and known preference classes constrain the search, but high likelihood
+does not certify class preservation. New examples still need reliable preference
+labels. The v1 title differs from the final bibliography title.
+
+\textbf{Connection.} Optimizer-discovered failures are useful calibration or
+misspecification examples. Our extension should compare against retraining on
+those same examples. Maintain an independent audit split: fitting both the
+reward and its tube to discovered attacks can overfit the tested attack family.}
+
+\subsection{New supervision targets and reasoning-state models}
+
+\paper{Xie et al., Noise-aware Learning (2026; arXiv v1)}{
+\textbf{Method and formula.} Reflection-aware correction rejects a successful
+continuation as evidence for step $t$ if a later step explicitly repairs $t$.
+Noise-aware iterative training then updates a filtered label via
+\[
+ \tilde y_t^{(k+1)}=
+ \begin{cases}
+ r_t^{(k)},&|r_t^{(k)}-\tilde y_t^{(k)}|>\delta,\\
+ \tilde y_t^{(k)},&\text{otherwise},
+ \end{cases}
+\]
+where $r_t^{(k)}$ is the current PRM prediction. This is the refinement rule in
+Eq. (7), followed by retraining \cite{noise}.
+
+\textbf{Conditions and evidence.} The correction targets MC false positives
+caused by repair; limited completer capability can still produce false negatives.
+Selective self-relabeling assumes that, after filtering, large disagreement is
+more often label noise than model error. If that assumption fails, the procedure
+can reinforce confident mistakes. Reported step-discrimination gains are
+empirical, not finite-sample guarantees.
+
+\textbf{Connection.} Treat reflection indicators and label/model disagreement
+as candidate uncertainty features. Evaluate against independent human or formal
+labels; the model's own refined labels cannot also serve as the truth used to
+validate its tube.}
+
+\paper{Wang et al., Hierarchical Multi-Step Reward Models (arXiv v5, 2026)}{
+\textbf{Model.} HRM augments single-step supervision with consecutive merged
+steps. Its basic dataset construction is
+\[
+ \mathcal D_{\rm HRM}=\mathcal D_{\rm PRM}\cup
+ \{(a_i\mathbin{\oplus}a_{i+1},R(a_i\mathbin{\oplus}a_{i+1}))\}_{i<T},
+\]
+where $\oplus$ concatenates steps. Hierarchical node compression augments
+MCTS-derived supervision. A two-class softmax produces process scores
+\cite{hrm}.
+
+\textbf{Conditions and evidence.} Section 3.2's compression argument preserves
+a sample-mean expectation under its i.i.d.-child assumption, while changing
+variance from $\sigma^2/N$ to $\sigma^2/(N-1)$ when one child is removed.
+Correlated search children need separate treatment. The policy-improvement
+experiments use filtered-data supervised fine-tuning rather than PPO/GRPO;
+stronger search performance is not an RL robustness theorem.
+
+\textbf{Connection.} Merged-step supervision is a representation baseline for
+inter-step dependence. Our structured tube should improve on a well-trained
+multi-step center, not merely on an impoverished independent-step model.
+Ordinary prefix-conditioned PRMs already see history; explicit multi-step
+supervision changes the training signal, not the existence of prefix context.}
+
+\paper{Han et al., Cliff (September 2026; arXiv v1)}{
+\textbf{Method and formula.} A teacher solves and verifies a problem, then
+identifies the first pitfall in incorrect student rollouts. With binary group
+success mean $\mu$ and $\sigma=\sqrt{\mu(1-\mu)}$, define
+$A_{\rm cor}=(1-\mu)/\sigma$ and $A_{\rm inc}=-\mu/\sigma$. Cliff assigns
+\[
+ A_{ij}=
+ \begin{cases}
+ A_{\rm cor}-b,&\text{correct rollout},\\
+ \lambda A_{\rm cor}-b,&\text{incorrect, before pitfall},\\
+ A_{\rm inc}-b,&\text{incorrect, at/after pitfall}.
+ \end{cases}
+\]
+Here $b$ is its centering baseline and $\lambda$ adjusts prefix credit; see
+Section 3.2, Eqs. (3)--(4) \cite{cliff}.
+
+\textbf{Conditions and evidence.} Incorrect teacher solutions trigger a
+vanilla-GRPO fallback. Homogeneous outcome groups need the implementation's
+zero-variance convention. Teacher validity and error localization are substantive
+assumptions; a correct teacher answer does not certify every judgment.
+
+\textbf{Connection.} Put uncertainty on the pitfall index rather than only
+scalar step scores. Compare prefix/suffix credit with robust scoring. The first-error
+boundary assumes a useful decomposition; repairing an earlier mistake can make
+that decomposition too coarse.}
+
+\paper{Gan et al., Reasoning State Propagation (September 2026; arXiv v1)}{
+\textbf{Model and formula.} RSP predicts break probability $b_t$ and repair
+probability $u_t$ for valid/invalid maintained reasoning states. With row-vector
+state probabilities,
+\[
+ M_t=\begin{pmatrix}1-b_t&b_t\\u_t&1-u_t\end{pmatrix},\qquad
+ \bm p_t=\bm p_{t-1}M_t,\qquad \bm p_0=(1,0).
+\]
+The process score is $p_t^{\rm valid}$. BCE on annotated intermediate states and
+on the terminal outcome trains the propagated probabilities; Section 3,
+Eqs. (2)--(9) \cite{rsp}.
+
+\textbf{Conditions and evidence.} Outcome gradients reach earlier transitions
+through the matrix product. Process labels ground intermediate states; outcome-only
+data alone generally cannot identify every break/repair probability. Equating
+a terminal valid state with answer correctness is a modeling decision that can
+fail for lucky answers or incomplete reasoning.
+
+\textbf{Connection.} A promising structured tube is a set of jointly admissible
+transition matrices, not independent score intervals. Our extension could study
+how transition uncertainty propagates and how ignoring repair causes excessive
+pessimism. This requires a separate comparison with RSP and labels that distinguish
+local errors from unresolved errors.}
+
+\paper{Fan et al., TIPS (September 2026; arXiv v1)}{
+\textbf{Method and theoretical detail.} A generative verifier emits thought $Z$,
+step labels $\hat{\bm Y}$, and outcome judgment $\hat D$. GRPO uses only
+$r=\ind\{\hat D=D\}$ to update the whole output. With pre-thought
+representation $H$, outcome error $P_e$, and binary entropy $H_b$, the paper's
+combined information bound is
+\[
+ I(Z;\bm Y\mid H)\geq
+ H(D\mid H)-H_b(P_e)-H(D\mid\bm Y,H).
+\]
+This follows from its Theorems 1--2, Section 3.3 \cite{tips}.
+
+\textbf{Conditions and evidence.} The bound is informative when verification
+is nontrivial, outcome error is small, and process labels largely determine
+the outcome. It concerns information in the thought, not correctness of each
+emitted label, calibrated probabilities, or resistance to reward optimization.
+Thought may encode the relevant information without the parser exposing it reliably.
+
+\textbf{Connection.} A potentially inexpensive center or independent critic.
+Audit generated labels separately and measure stochastic-judgment variability.
+Our uncertainty set cannot inherit process validity from outcome supervision
+without these additional checks.}
+
+\subsection{Robust objectives and calibration theory}
+
+\paper{Liu, Sun, and Zheng, Robust Optimization with Correlated Proxies (ICLR 2026)}{
+\textbf{Uncertainty set and exact objective.} Normalize proxy $z$ to mean zero
+and variance one under $d_{\pi_0}$. The paper constrains plausible rewards to
+reference mean $M$, standard deviation $V>0$, and correlation $\rho$ with $z$.
+Let $a=\E_{d_\pi}z$ and $D=\chi^2(d_\pi\|d_{\pi_0})$. Its inner solution gives
+\[
+ \inf_{r\in\U_{\rm corr}}J_r(\pi)
+ =M+V\left[\rho a-\sqrt{1-\rho^2}\sqrt{D-a^2}\right].
+\]
+See the proceedings paper, Section 3.1, Eqs. (4)--(9) \cite{robustcorr}.
+
+\textbf{Conditions and theory.} Support overlap and reference moments are
+essential; outside reference support, the unconstrained adversary can make
+rewards arbitrarily poor. The subtraction $D-a^2$ removes movement along the
+normalized proxy direction. A known-feature linear variant restricts reward
+structure and improves interpretability. The paper also analyzes occupancy
+estimation and optimization.
+
+\textbf{Connection.} A directly relevant example of \emph{coupling}, not an
+independent interval construction. Our extension would estimate a process-informed
+set from supervision and compare its geometry with this correlation set.
+Generic max--min reward optimization and safe-reference improvement are
+already prior work.}
+
+\paper{Liu et al., Robust General Utility for RL (August 2026; arXiv v1)}{
+\textbf{Objective.} The paper uses costs $f_\xi(\lambda_\theta)$ of policy
+occupancy $\lambda_\theta$ and solves
+\[
+ \min_{\theta\in\Theta}\max_{\xi\in\Xi}f_\xi(\lambda_\theta),\qquad
+ \Xi=\{\xi:d(\xi,\hat\xi)\leq d_0\}.
+\]
+Reward maximization reverses these signs. This includes linear rewards but also
+nonlinear occupancy utilities; see Section 3, Eq. (2) \cite{generalutility}.
+
+\textbf{Theoretical conditions.} The analysis separates utility regimes and
+uses convex compact parameter sets, smoothness conditions, and appropriate
+stationarity measures; proximal methods handle more general minimax cases.
+A stationarity guarantee is not a global-optimality or true-reward guarantee
+for arbitrary neural policies. The actual evaluation utility must belong to
+the modeled ambiguity set for the robust interpretation to hold.
+
+\textbf{Connection.} Useful when uncertainty concerns a utility beyond additive
+step reward. However, trajectory minimum/product aggregation is not automatically
+a function of ordinary state-action occupancy: history augmentation or a richer
+trajectory distribution may be required. Our formulation should establish that
+representation before importing general-utility algorithms or convergence claims.}
+
+\paper{Conformal prediction through hypothesis testing \cite{conformaltest}}{
+\textbf{Theoretical viewpoint.} Invert a family of level-$\alpha$ tests of a
+candidate augmented observation:
+\[
+ C_n(x)=\{y:\varphi(Z_{1:n},(x,y))=0\}.
+\]
+If the test rejects the true augmented observation with probability at most
+$\alpha$, then $\Prob\{Y_{n+1}\in C_n(X_{n+1})\}\ge1-\alpha$.
+The paper studies universality of permutation-based constructions under
+exchangeability, impossibility of unrestricted conditional coverage, and oracle
+optimality. Its oracle construction uses inverse conditional-density scores.
+
+\textbf{Conditions and limits.} Optimality is relative to a specified distribution
+and efficiency criterion; the conditional density is ordinarily unknown. Marginal
+exchangeability-based validity does not imply useful coverage at every rare input.
+Continuous interval-size objectives also need adaptation for binary labels and
+finite prediction sets.
+
+\textbf{Connection.} A useful conceptual check on proposed tube guarantees:
+state the null being tested, the sampling symmetry, and the coverage event.
+A valid test for a future random outcome does not by itself yield a simultaneous
+band for the conditional mean reward. The impossibility results motivate restricted
+subgroups, explicit structural assumptions, or approximate conditional guarantees.}
+
+\paper{CQR and minimax limits under known covariate shift \cite{cqrlimits}}{
+\textbf{Theoretical detail.} The paper analyzes conditional coverage and length
+errors relative to oracle equal-tailed intervals, separating quantile-estimation,
+calibration, and rank-discretization effects. It assumes known bounded density
+ratios in its shift results. In its explicit fixed-score, single-carrier
+construction, the minimax calibration scale is
+\[
+ \mathcal R_{m,p}\asymp
+ \sqrt{\frac{1+\chi^2(Q_X\Vert P_X)}{m}}.
+\]
+Its multi-atom construction adds a complexity factor corresponding to the number
+of atoms. This suggests the information scale
+$m_{\rm eff}=m/(1+\chi^2(Q_X\Vert P_X))$.
+
+\textbf{Conditions and limits.} These are results for the paper's specified
+classes and fixed-score calibration setting. They are not a universal lower bound
+for every learned representation, reward estimator, or adaptive PRM procedure.
+A marginal guarantee alone does not bound the realized conditional coverage profile.
+
+\textbf{Connection.} Helps quantify why highly concentrated optimized policies
+can demand substantially more calibration data. A theoretical project could
+specialize these error decompositions to problem-level trajectory scores or
+selected-prefix populations, while explicitly checking bounded-ratio and score
+assumptions. The divergence-based effective sample size is a diagnostic, not an
+independent proof of trajectory coverage.}
+
+\section{Revised literature}
+The following literature supplies the established methods, theoretical foundations,
+and evaluation resources needed to interpret the recent developments. Entries retain
+their mathematical details and limitations; papers already discussed above are not repeated.
+
+\subsection{Closest predecessors and the possible contribution}
+Uncertain rewards and pessimistic optimization are established ideas. Four
+comparisons are especially important:
+\begin{enumerate}
+\item AdvPO constructs a shared last-layer confidence set and optimizes
+reference-centered pessimistic improvement \cite{advpo}.
+\item Quantile and conditional-OT PRMs estimate prefix continuation-success
+uncertainty \cite{park,otprm}.
+\item Ensembles and reward-distribution DRO yield conservative effective rewards
+\cite{coste,rrlhf,unifying}.
+\item JOMI addresses prediction coverage after data-dependent selection
+\cite{jomi}; correlation-constrained robust RL already supplies structured
+reward sets and safe-improvement bounds \cite{correlated,robustcorr}.
+\end{enumerate}
+Our proposed contribution must therefore concern \emph{process-specific targets,
+shared error geometry, coverage after optimization, or an informative failure
+characterization}, rather than the generic idea of placing a tube around a reward.
+
+\subsection{Process supervision: targets, data, and representation}
+
+\paper{Lightman et al., Let's Verify Step by Step (2023)}{
+\textbf{Model and objective.} Human annotators label steps as positive, negative,
+or neutral. The PRM predicts label probabilities conditioned on the problem and
+prefix; training is step-label cross-entropy. The preferred solution score in
+Appendix F is
+\[
+ S(\tau)=\prod_{t=1}^{T}p_\theta(\text{positive or neutral}\mid h_t).
+\]
+The paper compares this with minimum aggregation and different handling of
+neutral labels, and evaluates best-of-$N$ selection on mathematical solutions
+\cite{lightman}.
+
+\textbf{Conditions and evidence.} PRM800K supplies human process supervision;
+active learning concentrates annotation on informative candidates. Annotation
+protocols and termination at a first error affect which prefixes receive labels.
+The product is a ranking rule: it is a joint-validity probability only if its
+factors have the appropriate conditional-event interpretation. It also penalizes
+longer trajectories.
+
+\textbf{Connection.} Use this as the intrinsic-validity data anchor and nominal
+PRM baseline. Our tube must define its treatment of neutral labels and censored
+post-error steps. Strong candidate-selection performance does not establish
+coverage or robustness under an RL-trained optimizer.}
+
+\paper{Wang et al., Math-Shepherd (ACL 2024; arXiv v2)}{
+\textbf{Model and objective.} A completer samples $K$ continuations from each
+prefix. With $C_k$ indicating a correct final answer, the two annotation rules are
+\[
+ \tilde y_t^{\rm SE}=K^{-1}\sum_k C_k,\qquad
+ \tilde y_t^{\rm HE}=\ind\{\max_k C_k=1\}.
+\]
+The verifier learns these labels and supports reranking and process-supervised
+PPO; see the annotation section and Eqs. (3)--(4) \cite{shepherd}.
+
+\textbf{Conditions and evidence.} Under independent Bernoulli continuations,
+soft estimation has mean $p_{\pi_c}(h_t)$ and variance $p_{\pi_c}(1-p_{\pi_c})/K$.
+Our calculation gives $\E\tilde y_t^{\rm HE}=1-(1-p_{\pi_c}(h_t))^K$.
+Thus hard labels depend on both completer capability and rollout count; they
+are not unbiased estimates of the single-rollout success probability. A repaired
+incorrect step can receive a positive label.
+
+\textbf{Connection.} Separate finite-rollout noise from incorrect target choice.
+Increasing $K$ shrinks estimation noise for the soft target but does not make
+completion success equal logical correctness. Freeze the completer when
+calibrating a success-probability tube.}
+
+\paper{Zhang et al., The Lessons of Developing PRMs (2025; arXiv v1)}{
+\textbf{Method.} The study compares Monte Carlo labels, LLM judgments, and human
+annotations. Consensus filtering retains solutions when MC and the judge agree
+on the first erroneous step. In consistent notation, its selection condition is
+\[
+ \mathcal D_{\rm keep}=\{\tau:k_{\rm MC}(\tau)=k_{\rm judge}(\tau)\}.
+\]
+The trained PRMs use step classification; the study also compares soft MC labels
+with hard labels $y_t=\ind\{\tilde p_t>0\}$ and evaluates both best-of-$N$ and
+ProcessBench \cite{lessons}.
+
+\textbf{Conditions and evidence.} In the reported eight-completion experiments,
+hard labels perform particularly well after filtering. Agreement is a quality
+filter, not proof that both annotators are correct. Conditioning on agreement
+also changes the data distribution and can discard difficult cases. Final-answer
+ranking and first-error identification need not improve together.
+
+\textbf{Connection.} Keep corrected supervision identical across uncertainty
+methods. Audit the rejected and retained strata: a tube calibrated only on
+consensus examples may fail on precisely the disputed prefixes that an optimizer
+finds. This paper supplies practical Qwen PRM comparators, not a confidence-set
+guarantee.}
+
+\paper{Ding et al., SCAN (2025; arXiv v1)}{
+\textbf{Method and formula.} SCAN estimates problem-level self-confidence
+$SC_\pi(x)$ as the fraction of correct sampled answers, uses high-confidence
+positive examples, and concentrates stepwise MC annotation on negatives.
+Near the estimated first error $k_e$, its soft-label correction has the form
+\[
+ \hat y_t=\min\{c_t/SC_\pi(x),1\};
+ \qquad \hat y_t=\ind\{c_t>0\}\ \text{away from that region},
+\]
+where $c_t$ is continuation success. A tolerance distance controls the affected
+steps; see Section 3.2, Eqs. (5)--(7) \cite{scan}.
+
+\textbf{Conditions and evidence.} Confidence-based filtering reduces annotation
+cost, while soft labels near a boundary accommodate error-location noise.
+Division by self-confidence is a heuristic capability correction, not an
+identified importance ratio or an unbiased estimator of intrinsic validity.
+Its denominator must be nonzero; filtering is part of the protocol.
+
+\textbf{Connection.} A useful comparator for improving the reward center and
+annotation efficiency. Stratify tube errors by problem confidence and distance
+to the estimated error. Check difficult low-confidence problems independently,
+since training selection can hide their uncertainty.}
+
+\paper{Pala et al., Error Typing for Smarter Rewards / PathFinder-PRM (2025; arXiv v1)}{
+\textbf{Model and objective.} PathFinder decouples error detection from reward
+estimation using two passes:
+\[
+ (M_t,C_t)=f_\theta(h_t),\qquad
+ R_t=g_\theta(h_t,M_t,C_t).
+\]
+The first predicts mathematical and consistency signals; the second conditions
+its reward on those signals. Training uses cross-entropy on categorical label
+tokens for mathematical validity, consistency, and step correctness
+\cite{pathfinder}.
+
+\textbf{Conditions and evidence.} Section 3.2 calls the dataset approximately
+400K trajectory samples, assembled from PRM800K and Mistral-PRM data; the precise
+serialized sample unit matters for annotation-cost comparisons. The paper maps
+neutral PRM800K labels into a category interpreted as suboptimal, which is its
+labeling convention rather than a universal definition of neutral validity.
+Both passes may share representation and judgment errors.
+
+\textbf{Connection.} Typed residuals can define distinct tube directions or
+coverage strata. Test whether any gain comes from the uncertainty geometry or
+simply richer labels. Account for the second forward pass when matching compute;
+error-type predictions do not themselves certify reward bounds.}
+
+\subsection{Credit assignment and adversarial failure discovery}
+
+\paper{Cheng et al., Stop Summation / PURE (NeurIPS 2025; arXiv v1)}{
+\textbf{Objective and implementation.} PURE targets
+$\max_\pi\E_\pi[\min_t r_t]$, rather than a sum. Its transformed step reward is
+\[
+ \omega_t=\frac{\exp(-r_t/\vartheta)}{\sum_j\exp(-r_j/\vartheta)},\qquad
+ r_t^{\rm tr}=\omega_t r_t.
+\]
+For a unique worst step $w$, $\vartheta\downarrow0$ concentrates reward at $w$.
+With $\gamma=1$, return-to-go is $r_w$ before/at $w$ and zero afterwards.
+Section 3.2 adds a leave-one-out baseline and optionally verifiable outcome
+reward \cite{pure}.
+
+\textbf{Conditions and evidence.} The exact minimum correspondence is a
+zero-temperature limit; finite temperature is a smooth reweighting. Ties share
+weight across worst steps. Minimum aggregation limits accumulation of favorable
+errors but can reward vacuous outputs with no low-scoring mathematical claims.
+It also treats a weak step differently from a recoverable reasoning error.
+
+\textbf{Connection.} Required aggregation/credit-assignment baseline. Hold
+$G$ fixed before comparing uncertainty estimators. Our extension could apply
+minimum aggregation to lower bounds, but any improvement must exceed simply
+switching from sum to minimum or adding an outcome check.}
+
+\paper{Zheng et al., CoLD (arXiv v2, May 2026)}{
+\textbf{Model and objective.} A noisy-feature bias estimator gives
+$q_\phi(h)=\sigmoid(b_\phi(h+\mathcal N))$. The inference score in Eq. (3) is
+\[
+ r_{\rm deb}(h)=r_\theta(h)q_\phi(h)-c q_\phi(h)-\alpha\ell(h),
+\]
+where $\ell$ measures step length. Joint training uses correctness cross-entropy
+and complementary correlation terms
+$\lambda_r\operatorname{Corr}(r_\theta,\ell)^2$ and
+$-\lambda_b\operatorname{Corr}(b_\phi,\ell)^2$ \cite{cold}.
+
+\textbf{Conditions and evidence.} The estimator is intended to capture length
+and surface style; Gaussian feature noise approximates the counterfactual
+removal of semantics. That approximation does not identify a causal length
+effect without further assumptions. The paper's limitation discussion recognizes
+this issue. A deterministic length penalty also changes preferences between
+long and short correct solutions.
+
+\textbf{Connection.} Length is a concrete common error direction for a structured
+tube. Compare against this direct bias correction and measure residual errors
+under meaning-preserving verbosity changes. A learned bias parameter's uncertainty
+would need independent estimation; neither the correlation penalty nor injected
+noise supplies confidence coverage.}
+
+\paper{Wallace et al., Universal Adversarial Triggers (EMNLP 2019)}{
+\textbf{Attack construction.} A short shared token sequence is optimized to
+cause a target behavior across many inputs. The objective can be written
+$\min_u\E_{x\sim\mathcal D}\mathcal L(f(u\mathbin{\oplus}x),y_{\rm target})$.
+A first-order token replacement ranks vocabulary embeddings using
+\[
+ v\in\arg\min_{v'\in\mathcal V}
+ (e_{v'}-e_{u_j})^\top\nabla_{e_{u_j}}\mathcal L,
+\]
+then evaluates candidate replacements and iterates \cite{triggers}.
+
+\textbf{Conditions and evidence.} This is a gradient-based discrete search
+approximation, not a proof that the chosen trigger globally optimizes the loss.
+The original demonstrations concern classification, reading comprehension, and
+language generation; transfer to a particular PRM is an empirical question.
+A universal trigger differs from optimizing a separate attack for each problem.
+
+\textbf{Connection.} Test shared prefixes, suffixes, and reward-delimiter
+perturbations in addition to semantic mistakes. Shared attacks can reveal a
+common model bias that ensemble spread misses. Keep the permitted token
+locations explicit; formatting attacks may exploit the scorer's parser rather
+than uncertainty about the mathematical reasoning itself.}
+
+\subsection{Reward hacking theory and optimization pressure}
+
+\paper{Skalse et al., Defining and Characterizing Reward Hacking (arXiv v2, 2025)}{
+\textbf{Definition.} Proxy $\hat r$ and target $r^*$ are hackable over policy
+class $\Pi$ if there exist $\pi,\pi'\in\Pi$ with
+\[
+ J_{\hat r}(\pi')>J_{\hat r}(\pi),\qquad
+ J_{r^*}(\pi')<J_{r^*}(\pi).
+\]
+Additive returns are linear in discounted visit counts:
+$J_r(\pi)=\langle r,\mathcal F^\pi\rangle$ \cite{skalse}.
+
+\textbf{Theoretical result.} The revised full text's Theorem 1 states that
+nontrivial unhackable reward pairs are equivalent on a stationary-policy set
+containing an open subset; Corollary 1 covers all stationary policies. Equivalent
+means the same policy ordering, not identical numerical rewards. Finite policy
+sets permit nontrivial nonequivalent unhackable pairs. The abstract's compressed
+wording should not replace these precise statements.
+
+\textbf{Connection.} Aim for restricted-domain coverage or safe improvement
+relative to a reference, rather than universal nontrivial proxy alignment.
+A finite candidate pool has a different guarantee scope from all policies.
+Our tube can reduce specific reversals without eliminating every possible
+reversal or implying that every nominal RL run must hack.}
+
+\paper{Gao et al., Scaling Laws for Reward Model Overoptimization (2022)}{
+\textbf{Empirical formulas.} With $d=\sqrt{\KL(\pi\|\pi_0)}$, gold-model
+reward improvement is fitted by
+\[
+ R_{\rm BoN}(d)=d(\alpha_{\rm B}-\beta_{\rm B}d),\qquad
+ R_{\rm RL}(d)=d(\alpha_{\rm R}-\beta_{\rm R}\log d).
+\]
+Coefficients vary with reward-model size and data. For continuous, untied
+best-of-$N$ selection, the paper uses
+$D_{\mathrm{KL}}^{\rm BoN}=\log N-(N-1)/N$ \cite{gao}.
+
+\textbf{Conditions and evidence.} These are fitted scaling relationships,
+not universal laws. The RL expression is not a good local description at the
+origin. A larger learned gold model supplies synthetic preferences and evaluation;
+it is still a proxy for human intent. The analytic BoN KL formula assumes the
+particular independent-sampling/ranking model and needs care with ties or
+restricted discrete supports.
+
+\textbf{Connection.} Plot target quality against $N$, training steps, and
+policy divergence, alongside proxy reward. Compare the point at which quality
+peaks and declines. Mathematical answer checks and independent process audits
+can replace a learned gold reward where available; one favorable checkpoint
+cannot establish mitigation.}
+
+\paper{Laidlaw et al., Correlated Proxies (ICLR 2025; arXiv v3)}{
+\textbf{Definition and theorem.} Let
+$\operatorname{Corr}_{d_{\pi_0}}(\hat r,r^*)=\rho>0$ and let
+$\sigma_{\hat r},\sigma_{r^*}$ be reference-distribution standard deviations.
+For $d_\pi\ll d_{\pi_0}$, Theorem 5.1 gives
+\[
+ \frac{\Delta J_{r^*}}{\sigma_{r^*}}
+ \geq\frac{1}{\rho}\left[
+ \frac{\Delta J_{\hat r}}{\sigma_{\hat r}}
+ -\sqrt{(1-\rho^2)\chi^2(d_\pi\|d_{\pi_0})}\right].
+\]
+This motivates occupancy-regularized policy optimization (ORPO)
+\cite{correlated}.
+
+\textbf{Conditions.} Correlation is under the reference occupancy, not a
+pointwise error guarantee. Nonzero variances, support overlap, and normalized
+occupancy conventions matter. A positive lower bound certifies improvement;
+there need not exist a policy achieving such a bound. Action-level KL and
+occupancy divergence are different objects.
+
+\textbf{Connection.} Relate tube residual error to the change in prefix
+occupancy, and test whether policy movement explains apparent mitigation.
+Estimating a correlation or density ratio in enormous text state spaces is
+itself a statistical problem. This result supplies a comparison for any proposed
+reference-centered PRM safe-improvement theorem.}
+
+\subsection{Algorithmic context for the experiments}
+
+\paper{Sutton and Barto, Reinforcement Learning: An Introduction (2018)}{
+\textbf{Core equations.} For a fixed policy in a discounted MDP, the Bellman
+expectation equation is
+\[
+ V^\pi(s)=\sum_a\pi(a\mid s)\sum_{s',r}p(s',r\mid s,a)
+ [r+\gamma V^\pi(s')].
+\]
+Temporal-difference learning uses
+$\delta_t=r_t+\gamma V(s_{t+1})-V(s_t)$ and
+$V(s_t)\leftarrow V(s_t)+\alpha\delta_t$; the policy-gradient theorem underlies
+actor--critic learning \cite{sutton}.
+
+\textbf{Conditions.} The state must contain enough history for the Markov
+property. Infinite-horizon discounted values require appropriate boundedness
+and $\gamma<1$; finite-horizon values also depend on time. Standard Bellman
+recursions assume additive rewards and a fixed model. Approximate values and
+bootstrapping introduce estimation error separate from PRM error.
+
+\textbf{Connection.} Use Part II to translate these objects into text prefixes,
+tokens/steps, and terminal correctness. Our tube changes the reward objective,
+while a critic estimates return under that objective. Confusing critic variance
+with reward uncertainty would obscure the mechanism. This is a textbook
+background reference, not a new reward-hacking result.}
+
+\paper{Schulman et al., Proximal Policy Optimization (2017)}{
+\textbf{Objective.} With importance ratio
+$q_t(\theta)=\pi_\theta(a_t\mid s_t)/\pi_{\rm old}(a_t\mid s_t)$,
+PPO's clipped surrogate is
+\[
+ L^{\rm clip}(\theta)=\hat\E_t\min\{q_t\hat A_t,
+ \clip(q_t,1-\epsilon,1+\epsilon)\hat A_t\}.
+\]
+The full training objective can add value-fitting and entropy terms; the paper
+also studies adaptive KL penalties \cite{ppo}.
+
+\textbf{Theoretical distinction.} The minimum is a lower surrogate relative
+to the unclipped sample objective. It is not a confidence bound on true reward
+and does not enforce a global trust region for every state. Multiple epochs
+reuse on-policy samples while controlling update incentives; a bad reward
+still gives a bad advantage estimate.
+
+\textbf{Connection.} Keep clipping, critic fitting, KL coefficients, and
+optimization epochs fixed when comparing nominal and robust PRM rewards.
+Recompute the intended robust return/advantage consistently. PPO's use of
+``pessimism'' concerns an optimization surrogate and must not be conflated with
+pessimism over an uncertain reward function.}
+
+\paper{Shao et al., DeepSeekMath / GRPO (2024; arXiv v3)}{
+\textbf{Objective and credit assignment.} GRPO eliminates a learned value
+baseline by sampling a group and normalizing its rewards. Outcome advantages are
+\[
+ \hat A_i=\frac{R_i-\bar R}{s_R};\qquad
+ \hat A_{i,t}^{\rm process}=\sum_{j:\operatorname{end}(j)\geq t}
+ \frac{r_{ij}-\bar r}{s_r}.
+\]
+These feed a PPO-style clipped objective with a separate policy KL term.
+The process formula normalizes over group step rewards; see Section 4.1
+\cite{deepseekmath}.
+
+\textbf{Conditions and evidence.} Groups with identical outcomes give zero
+centered advantages and require a zero-standard-deviation convention. Summing
+future normalized process rewards changes length incentives and credit
+assignment. Group normalization can also amplify small differences. The paper
+studies iterative reward-model updates; the target distribution can consequently
+change during training.
+
+\textbf{Connection.} A natural RL testbed, but a lower PRM score is not by
+itself a lower bound on the normalized advantage. Audit how our tube's scores
+pass through normalization and aggregation. Distinguish reward-model uncertainty,
+Monte Carlo group variability, and policy-gradient estimation noise.}
+
+\subsection{Uncertainty and pessimism: established predecessors}
+
+\paper{Coste et al., Reward Model Ensembles (arXiv v2, 2024)}{
+\textbf{Aggregation rules.} For $K$ reward models, define
+$\mu=K^{-1}\sum_k r_k$ and $v=K^{-1}\sum_k(r_k-\mu)^2$. The compared scores are
+\[
+ r_{\rm mean}=\mu,\qquad r_{\rm WCO}=\min_k r_k,
+ \qquad r_{\rm UWO}=\mu-\lambda v.
+\]
+Worst-case optimization (WCO) and uncertainty-weighted optimization (UWO)
+are tested with best-of-$N$ and PPO; see Section 3, Eqs. (4)--(5)
+\cite{coste}.
+
+\textbf{Evidence and assumptions.} Experiments use a larger learned gold
+reward, including synthetic preference-label flips. Member diversity comes
+from initialization and training randomness on shared data. Minimum-member
+scoring is below truth at a point if at least one member is not overestimating
+there; the method does not guarantee that condition. Its pointwise minimum
+also need not correspond to one shared reward model for all trajectories.
+
+\textbf{Connection.} Include all three rules with matched ensemble cost.
+Distinguish variance from standard-deviation penalties and align reward scales.
+Test common errors rather than treating member spread as calibrated confidence.
+Our coupled function set should be compared with both per-sample WCO and a
+single worst ensemble member chosen at policy level.}
+
+\paper{Zhang et al., AdvPO (2024; arXiv v2)}{
+\textbf{Confidence set.} With frozen final features $e(x,y)$,
+$r_\phi=\phi^\top e$, construct
+\[
+ M_D=\lambda I+\sum_{i,y\in\{y_i^+,y_i^-\}}e(x_i,y)e(x_i,y)^\top,
+ \qquad \mathcal C=\{\phi:\norm{\phi-\hat\phi}_{M_D}\leq b\}.
+\]
+For $g=\E_\pi e-\E_{\rm ref}e$, reference-centered robust improvement becomes
+\[
+ \inf_{\phi\in\mathcal C}\phi^\top g
+ =\hat\phi^\top g-b\sqrt{g^\top M_D^{-1}g}.
+\]
+A policy KL penalty completes the objective; Section 4, Eqs. (5)--(7),
+Theorem 4.1 \cite{advpo}.
+
+\textbf{Theory and limits.} Theorem 3.1's reward bound includes an approximation
+term and assumes infinite-width/positive-definite NTK structure. Experimental
+radii are tuned rather than independently coverage-calibrated. One common
+parameter adversary is less conservative than separate worst-case choices for
+each sample, by convexity of the norm; this distinction is already central here.
+
+\textbf{Connection.} The closest predecessor to Approach B and to
+reference-centered safe improvement. A publishable extension must add
+process-specific construction, measured joint coverage, or misspecification
+control, rather than merely repeat the ellipsoid's dual-norm formula.}
+
+\paper{Yan et al., Reward-Robust RLHF (2024; arXiv v1)}{
+\textbf{Objective and uncertainty model.} For a finite reward family $\U$,
+\[
+ J_\lambda(\pi)=\lambda J_{\hat r}(\pi)
+ +(1-\lambda)\min_{r\in\U}J_r(\pi).
+\]
+The Bayesian Reward Model Ensemble shares a backbone and has Gaussian heads
+$r_k=\mu_k+\sigma_k\varepsilon$, with $\varepsilon\sim\mathcal N(0,1)$.
+The nominal head is selected using low uncertainty; see Sections 5--5.1
+\cite{rrlhf}.
+
+\textbf{Conditions and evidence.} The nominal/robust tradeoff reduces excessive
+conservatism but weakens a purely worst-case interpretation. Shared features
+can produce common bias, and Gaussian sampling is a modeling assumption,
+not proof that the true reward lies in the family. The paper's constant-reward
+argument requires action-independent remaining return: variable termination or
+length-dependent cumulative constants need separate treatment. Policy KL can
+still move the actor even when reward advantages vanish.
+
+\textbf{Connection.} Compare robust tubes with a nominal--robust interpolation,
+but report the tradeoff parameter and coverage independently. Preserve the
+minimum-outside-expectation objective when implementing a shared-function
+adversary; swapping that order changes the method and its conservatism.}
+
+\paper{Park et al., Know What You Don't Know (2025; arXiv v1)}{
+\textbf{Target and calibration.} Fixed-completer rollouts produce
+$\tilde p(h)=K^{-1}\sum_k C_k$. Quantile heads minimize
+\[
+ \mathcal L_{\rm QR}=\frac{1}{|\mathcal B|}\sum_{\beta\in\mathcal B}
+ \rho_\beta\bigl(\tilde p(h)-q_\beta(h)\bigr).
+\]
+Instance-adaptive scaling uses a conservative predicted success value $p_L$:
+\[
+ N_{\rm IAS}=\min\!\left\{N_{\max},
+ \left\lceil\frac{\log(1-C)}{\log(1-p_L)}\right\rceil\right\}.
+\]
+See Sections 4.1--4.2 \cite{park}.
+
+\textbf{Conditions and theory.} The budget identity uses independent trials:
+$1-(1-p)^N\geq C$. The paper's Theorem 1 considers an uncapped budget and a
+held-out calibration adjustment. Fitted quantile regression alone is not exact
+finite-sample conformal coverage. A cap can defeat the target confidence.
+The existence of a correct candidate does not guarantee that the reranker
+chooses it; $p_L=0$ requires a maximum-budget convention.
+
+\textbf{Connection.} A required calibrated-PRM baseline. Its uncertainty target
+is continuation success, not intrinsic validity. Our extension should test
+selected-candidate and simultaneous-prefix coverage, rather than assuming that
+marginal calibration survives search or policy updates.}
+
+\subsection{Statistical foundations for constructing and calibrating a tube}
+
+\paper{Deep ensembles \cite{deepensemble}}{
+\textbf{Model and equations.} For Gaussian regression, member $m$ minimizes
+$\frac12\log\sigma_m^2(x)+\frac{(y-\mu_m(x))^2}{2\sigma_m^2(x)}$.
+The predictive mixture has moments
+\[
+ \bar\mu=\frac1M\sum_m\mu_m,\qquad
+ v=\frac1M\sum_m\sigma_m^2+\frac1M\sum_m(\mu_m-\bar\mu)^2.
+\]
+The second term measures disagreement between fitted means; the first represents
+within-member predictive variation. These are mixture moments, not a claim that
+the mixture itself is Gaussian. The paper combines proper scoring rules with
+independently initialized networks; classification predictions average probabilities.
+
+\textbf{Conditions and evidence.} Predictive calibration and robustness are
+empirical findings. Independent initialization does not establish independence
+of errors on new inputs, especially with shared training data or representations.
+An ensemble standard deviation is neither a finite-sample confidence radius nor
+a guarantee of coverage under optimization.
+
+\textbf{Connection.} A practical starting estimator for the tube center and
+heterogeneous width. Retaining each member's entire vector of prefix predictions
+also supplies coherent trajectory scenarios. Compare between-member uncertainty
+against total predictive variance: penalizing irreducible outcome randomness can
+reject valid but difficult reasoning. Independent calibration and attack tests
+remain necessary.}
+
+\paper{Self-normalized confidence sets for linear bandits \cite{abbasi}}{
+\textbf{Theorem and equations.} With $Y_t=X_t^\top\theta_*+\eta_t$,
+predictable features, conditionally $\sigma$-sub-Gaussian noise, and
+$\norm{\theta_*}_2\le S$, define
+\[
+ V_n=\lambda I+\sum_{t\le n}X_tX_t^\top,\quad
+ \widehat\theta_n=V_n^{-1}\sum_{t\le n}X_tY_t.
+\]
+Theorem 2 gives, simultaneously over $n$, with probability at least $1-\delta$,
+\[
+ \norm{\widehat\theta_n-\theta_*}_{V_n}
+ \le \sigma\sqrt{2\log\frac{\det(V_n)^{1/2}}
+ {\det(\lambda I)^{1/2}\delta}}+\sqrt\lambda S=:b_n.
+\]
+Thus prediction error is bounded by $b_n\norm{\phi(h)}_{V_n^{-1}}$ on that event.
+
+\textbf{Conditions and scope.} Adaptively chosen features are allowed, but the
+linear model, predictable design, noise condition, and parameter bound are
+substantive assumptions. A neural feature map learned on the same data, a
+misspecified linear head, or logistic preference likelihood requires additional
+analysis. OFUL uses the set for optimism, rather than pessimistic reward selection.
+
+\textbf{Connection.} This is a rigorous template for a shared-parameter tube,
+with larger widths in poorly observed directions. AdvPO already adapts related
+geometry to reward optimization. A project contribution must address PRM-specific
+dependence, misspecification, or coverage, rather than rediscover this ellipsoid.}
+
+\paper{Conformalized quantile regression (CQR) \cite{cqr}}{
+\textbf{Construction and guarantee.} Fit lower and upper quantiles on a training
+split. On $m$ held-out examples compute
+\[
+ S_i=\max\{\widehat q_{\alpha/2}(X_i)-Y_i,
+ Y_i-\widehat q_{1-\alpha/2}(X_i)\},\quad
+ k=\lceil(m+1)(1-\alpha)\rceil.
+\]
+Let $q$ be the $k$th calibration order statistic, taking $q=+\infty$ if
+$k>m$. The interval is
+\[
+ C(x)=[\widehat q_{\alpha/2}(x)-q,
+        \widehat q_{1-\alpha/2}(x)+q].
+\]
+Exchangeability of calibration and test examples yields marginal coverage
+$\Prob\{Y_{\rm new}\in C(X_{\rm new})\}\ge1-\alpha$;
+the upper bound is $1-\alpha+1/(m+1)$ under appropriate absence of ties.
+
+\textbf{Conditions and limits.} The quantile model need not be correct for
+marginal coverage, but affects efficiency. The guarantee does not assert
+coverage conditional on every prefix, simultaneously over a trajectory, or after
+reward-based selection. Binary targets can produce uninformative prediction sets.
+
+\textbf{Connection.} CQR calibrates a future random label or return, not directly
+the unknown mean reward function. To obtain a trajectory tube, define a suitable
+trajectory-level score and calibration unit; do not simply reinterpret stepwise
+prediction intervals as simultaneous confidence bands.}
+
+\paper{JOMI: selection-conditional conformal prediction \cite{jomi}}{
+\textbf{Construction and guarantee.} For a selected test index $j$, JOMI forms
+candidate-label-dependent reference sets $\mathcal R_j(y)$ by swapping calibration
+and test examples and retaining swaps that preserve the relevant selection event.
+Schematically, its prediction set is
+\[
+ C_j=\left\{y:V(X_j,y)\le
+ Q_{1-\alpha}\bigl(\{V_i:i\in\mathcal R_j(y)\}\cup\{+\infty\}\bigr)\right\}.
+\]
+Under the paper's permutation and exchangeability conditions, coverage holds
+conditional on $j$ being selected and a specified class of selection outcomes.
+Randomization can handle ties and sharpen exactness.
+
+\textbf{Conditions and limits.} The selection rule must satisfy the required
+invariance, and the reference set must actually implement that rule. The relevant
+calibration/test exchangeability is conditional on other test covariates.
+Candidates generated for one shared problem are dependent; treating every prefix
+or candidate as an independent calibration example does not establish this premise.
+
+\textbf{Connection.} Especially relevant to best-of-$N$, where ordinary marginal
+coverage can fail at the selected maximum. Problem-level calibration or a justified
+conditional sampling model is needed. This covers the selected prediction target;
+it does not automatically give joint trajectory coverage or validity throughout
+an adaptive RL training loop.}
+
+\paper{Weighted conformal prediction under covariate shift \cite{weighted}}{
+\textbf{Construction and guarantee.} Suppose $Q_X\ll P_X$, the density ratio
+$w(x)=dQ_X/dP_X$ is known, and $P_{Y\mid X}=Q_{Y\mid X}$. Split conformal replaces
+the ordinary score quantile by the weighted distribution
+\[
+ \sum_{i=1}^m\frac{w(X_i)}{\sum_{k=1}^m w(X_k)+w(x)}\delta_{S_i}
+ +\frac{w(x)}{\sum_{k=1}^m w(X_k)+w(x)}\delta_{+\infty}.
+\]
+Its $(1-\alpha)$ quantile yields marginal coverage for a test point drawn from
+$Q$, while calibration examples come from $P$.
+
+\textbf{Conditions and limits.} The infinite test-point mass is essential to
+the finite-sample correction. Poor overlap can force an infinite quantile.
+Estimated or clipped weights do not inherit the exact theorem without accounting
+for their error. The theorem assumes stable conditional labels, not arbitrary
+joint distribution shift.
+
+\textbf{Connection.} This offers a route from reference-policy calibration to a
+new policy's prefix distribution. If a PRM target is continuation success, changing
+the rollout policy can change $Y\mid X$, violating covariate shift. Policy selection
+using calibration labels also needs separate treatment. Measure overlap and weight
+concentration before claiming a usable tube under optimization.}
+
+\paper{Conformal prediction beyond exchangeability \cite{beyond}}{
+\textbf{Theoretical detail.} The paper quantifies degradation using swapped-data
+laws rather than assuming exact exchangeability. A representative coverage-gap
+bound for prespecified weights $w_i\in[0,1]$ has the form
+\[
+ (1-\alpha)-\Prob\{Y_{n+1}\in C(X_{n+1})\}
+ \le\frac{\sum_{i=1}^n w_i\,
+ \operatorname{TV}(\mathcal L(Z),\mathcal L(Z^{(i)}))}
+ {1+\sum_{i=1}^n w_i},
+\]
+where $Z^{(i)}$ swaps observation $i$ with the test observation. The paper also
+handles nonsymmetric fitting procedures using its randomization construction.
+
+\textbf{Conditions and limits.} The right side must be small to obtain a useful
+statement. Recency weighting can reduce the influence of old observations but
+also reduces calibration information. Data-dependent weights require the relevant
+conditioning or additional justification. Bounding swap distances for adaptively
+generated reasoning trajectories is a separate research problem.
+
+\textbf{Connection.} Useful for analyzing gradual policy drift and periodically
+recalibrated PRMs. It supplies a degradation statement, not a guarantee under
+arbitrary reward-driven distribution shift. An experiment should report how coverage
+changes with policy divergence and calibration age, rather than silently assuming
+that a reference-policy conformal guarantee survives RL.}
+
+\paper{Conformal risk control (CRC) \cite{crc}}{
+\textbf{Construction and theorem.} Let $L_i(\lambda)$ be exchangeable loss
+functions, bounded above by $B$, nonincreasing and right-continuous in $\lambda$.
+With $\widehat R_n(\lambda)=n^{-1}\sum_iL_i(\lambda)$, choose
+\[
+ \widehat\lambda=\inf\left\{\lambda:
+ \frac{n}{n+1}\widehat R_n(\lambda)+\frac{B}{n+1}\le\alpha\right\}.
+\]
+With an admissible conservative endpoint and the paper's conditions,
+$\E[L_{n+1}(\widehat\lambda)]\le\alpha$.
+
+\textbf{Conditions and limits.} This is an expected-risk guarantee, not a
+high-probability bound on every deployed instance or risk conditional on selection.
+Monotonicity concerns the actual loss function. If changing $\lambda$ changes which
+trajectory is selected, the resulting error rate need not be monotone. Empty-set
+or abstention behavior must be included in the definition.
+
+\textbf{Connection.} A suitable PRM application is thresholding fixed scores:
+\[
+ L_i(\lambda)=\ind\{\text{invalid step}_i\}\ind\{s_i\ge\lambda\}.
+\]
+This loss is nonincreasing. This controls erroneous acceptance frequency, which differs from
+the fraction of accepted steps that are invalid. For a pessimism coefficient used
+inside best-of-$N$ or RL, first prove the required monotonicity or use another
+calibration method.}
+
+\paper{CROMS: model selection for conformalized robust optimization \cite{croms}}{
+\textbf{Decision formulation.} A conformal set induces the robust decision
+\[
+ z_\lambda(x)\in\arg\min_z\max_{y\in C_\lambda(x)}\varphi(y,z),\qquad
+ \lambda_*\in\arg\min_\lambda\E[\varphi(Y,z_\lambda(X))].
+\]
+Thus model selection targets realized decision loss, rather than interval width
+alone. The paper distinguishes efficient E-CROMS, with approximate/asymptotic
+validity and optimality results, from a symmetric augmented-data F-CROMS construction
+with finite-sample coverage and asymptotic optimality. Its localized variant
+requires additional nonparametric assumptions.
+
+\textbf{Conditions and limits.} Ordinary split-conformal coverage cannot simply
+be retained after arbitrarily choosing the model on the same calibration data.
+The guarantees depend on the specified selection construction and regularity
+conditions. Optimizing a narrow interval can select a model with worse robust
+decisions; conversely, conservative decisions can lose substantial nominal utility.
+
+\textbf{Connection.} Particularly relevant when choosing among tube geometries,
+uncertainty estimators, or pessimism levels. Calibrate and select the entire
+uncertainty-to-decision pipeline, and evaluate the resulting reasoning success and
+abstention cost. Decision-aware calibration is already established here; novelty
+would require a PRM-specific selection/dependence analysis or demonstrably improved
+robust reasoning behavior.}
+
+\subsection{Robust optimization and reward shaping}
+
+\paper{Distributionally robust optimization (Duchi--Namkoong) \cite{duchi}}{
+\textbf{Objective and duality.} For loss $\ell_\theta$, optimize
+\[
+ \min_\theta\sup_{Q\ll P:\,D_f(Q\Vert P)\le\rho}\E_Q[\ell_\theta].
+\]
+Under suitable duality conditions, its inner value can be expressed as
+\[
+ \inf_{\lambda\ge0,\eta}\left\{
+ \lambda\rho+\eta+\lambda\E_P
+ \left[f^*\left(\frac{\ell_\theta-\eta}{\lambda}\right)\right]\right\},
+\]
+with boundary cases interpreted by limits. The paper develops guarantees for
+specified divergence families, including Cressie--Read divergences, under loss
+and statistical regularity assumptions.
+
+\textbf{Conditions and limits.} Robustness to a subpopulation follows only when
+its conditional distribution lies inside the ambiguity set. A ball around an
+empirical distribution reweights observed support; it cannot create an unseen
+failure type. Divergence choice, radius, and tail assumptions determine how
+conservative and statistically estimable the objective is.
+
+\textbf{Connection.} Distinguish uncertainty about the distribution of problems
+or trajectories from uncertainty about the reward function itself. They can be
+combined, but their adversaries and coverage events differ. A PRM project could
+use DRO for rare reasoning patterns while a reward-function tube handles evaluator
+error; identifying which uncertainty actually causes hacking is essential.}
+
+\paper{Robust dynamic programming (Iyengar) \cite{iyengar}}{
+\textbf{Structural principle.} Rectangular transition ambiguity permits local
+adversarial choices compatible with dynamic programming. A standard state-action
+rectangular discounted recursion can be represented as
+\[
+ (Tv)(s)=\max_a\inf_{p\in\mathcal P_{s,a}}
+ \left\{r(s,a)+\gamma\sum_{s'}p(s')v(s')\right\}.
+\]
+For bounded rewards, $\gamma<1$, and suitable nonempty uncertainty sets, the local
+operator preserves the contraction structure needed for value iteration. The
+paper's central contribution is the role of rectangularity in robust dynamic
+programming and associated game interpretations.
+
+\textbf{Conditions and limits.} Rectangularity means the uncertainty set allows
+the relevant combinations of local choices. A single globally shared uncertain
+parameter typically couples states and violates that structure. Substituting
+independent local worst cases changes the adversary and can produce excessive
+pessimism. This displayed recursion illustrates the standard specialization;
+it is not a claim that every reward tube meets the paper's assumptions.
+
+\textbf{Connection.} A trajectory tube must specify whether errors can be chosen
+independently at every prefix or must arise from one coherent reward function.
+That choice determines both conservatism and computational tractability. Robust
+Bellman updates require an explicit rectangular formulation or a justified state
+augmentation, not merely an uncertainty interval attached to each step.}
+
+\paper{Potential-based reward shaping \cite{shaping}}{
+\textbf{Theorem and telescoping identity.} The shaping reward
+\[
+ F(s,a,s')=\gamma\Phi(s')-\Phi(s)
+\]
+changes a finite-horizon discounted return by
+\[
+ \sum_{t=0}^{T-1}\gamma^t(r_t+F_t)
+ =\sum_{t=0}^{T-1}\gamma^t r_t-\Phi(s_0)+\gamma^T\Phi(s_T).
+\]
+With a fixed initial state and appropriate terminal boundary, or a bounded
+potential in an infinite discounted horizon, this preserves policy ordering.
+The necessity result concerns transformations that preserve optimal policies
+across the paper's broad class of environments.
+
+\textbf{Conditions and limits.} A poor but fixed potential can still preserve
+ordering when used consistently; it need not accelerate learning. Terminal
+potentials and discount conventions matter. Arbitrary positive process rewards,
+stepwise probability products, or min-form returns are not automatically
+potential-based shaping.
+
+\textbf{Connection.} If a PRM estimates a reasoning potential, uncertainty should
+be placed on a shared potential function and propagated through differences.
+Independently minimizing each difference can break telescoping by choosing
+incompatible endpoint values. This provides a precise way to distinguish
+uncertainty in a policy-invariant shaping signal from uncertainty in a new
+objective that can alter the optimal reasoning strategy.}
+
+\subsection{Benchmarks and what their labels can establish}
+
+\paper{ProcessBench \cite{processbench}}{
+\textbf{Task and metric.} The benchmark contains approximately 3,400 reasoning
+traces, with the earliest erroneous step or a no-error label. Its reported
+harmonic metric combines exact first-error localization accuracy on erroneous
+traces and no-error accuracy on clean traces:
+\[
+ F=\frac{2A_{\rm err}A_{\rm clean}}{A_{\rm err}+A_{\rm clean}}.
+\]
+This is a harmonic mean of two accuracies, rather than ordinary stepwise binary
+classification F1. PRM evaluation thresholds are chosen on a designated subset
+in the original protocol.
+
+\textbf{Evidence and limits.} The benchmark tests mathematical error detection
+across difficulty levels. Correct final answers can coexist with invalid intermediate
+reasoning. Earliest-error annotation does not supply verified labels for every
+later step, so it cannot directly establish simultaneous all-step coverage.
+A static localization score also does not measure robustness to an optimizer
+searching for high-scoring wrong solutions.
+
+\textbf{Connection.} Use it to test error localization and clean-trace rejection,
+with thresholds and uncertainty calibration fixed independently of evaluation.
+Report false acceptance and abstention alongside the benchmark metric. For a
+full trajectory-tube coverage claim, obtain all-step labels or define a coverage
+event restricted to the observed first-error target.}
+
+\paper{PRMBench \cite{prmbench}}{
+\textbf{Task and metric.} PRMBench reports 6,216 instances and 83,456 step labels,
+organized around simplicity, soundness, and sensitivity, with nine finer dimensions.
+Its PRM-score combines negative-class and overall F1:
+\[
+ \operatorname{PRM\!\text{-}\!score}
+ =w_1F_{1,\rm neg}+w_2F_{1,\rm overall}.
+\]
+The benchmark probes redundant or circular reasoning, correctness failures, and
+sensitivity to changes in reasoning. The weighting and threshold protocol should
+be recorded when reproducing results.
+
+\textbf{Evidence and limits.} Step-level discrimination reveals weaknesses
+hidden by aggregate final-answer accuracy. However, redundancy is a utility or
+efficiency judgment, not necessarily mathematical invalidity. Aggregating these
+dimensions into a single binary target can obscure what a PRM's reward represents.
+Static test cases do not certify calibration under adversarial optimization.
+
+\textbf{Connection.} Separate correctness, informativeness, and sensitivity in
+our labels and reported results. A tube designed for correctness should not be
+judged solely by its agreement with a simplicity preference. Paired transformed
+traces can test whether uncertainty responds to semantic errors while remaining
+stable under harmless rewrites; that invariance diagnostic is a proposed project
+evaluation, rather than a coverage theorem supplied by PRMBench.}
+
+\paper{Socratic-PRMBench \cite{socratic}}{
+\textbf{Task and metric.} The benchmark has 2,995 samples spanning transformation,
+decomposition, regathering, deduction, verification, and integration, with twenty
+error types. Its aggregate score is explicitly
+\[
+ \operatorname{Score}=\tfrac12F_{1,\rm neg}+\tfrac12F_{1,\rm overall}.
+\]
+The construction uses structured reasoning patterns, synthetic modifications,
+and filtering, with a sampled human assessment of annotation agreement.
+
+\textbf{Evidence and limits.} Pattern-level results can reveal that a reward
+model recognizes deduction errors but misses verification or integration failures.
+Sampled annotation agreement does not certify every synthetic label. Aggregate F1
+can conceal a high false-acceptance rate in a rare pattern and says nothing directly
+about coverage on optimizer-selected traces.
+
+\textbf{Connection.} A useful stress test for heterogeneous tube widths and
+structured uncertainty. Our proposed diagnostic is empirical coverage and false
+acceptance within each prespecified pattern, together with interval width and
+abstention. Such subgroup results require enough independent problems per group;
+they do not imply unrestricted conditional coverage for arbitrary prefixes.
+Pair this static benchmark with best-of-$N$ and RL stress tests so that uncertainty
+quality is evaluated where reward hacking actually appears.}
+
+\subsection{Synthesis and research positioning}
+\begin{longtable}{p{0.20\linewidth}p{0.35\linewidth}p{0.36\linewidth}}
+\toprule
+Family & Established capability & What our study must resolve \\
+\midrule
+\endhead
+Process supervision & Intermediate verification & What quantity the tube covers \\
+Label denoising & Better synthetic labels & Coverage after optimization \\
+PURE / shaping & Better credit assignment or outcome invariance & Tube benefits
+with aggregation held fixed \\
+Ensembles / AdvPO & Pessimistic reward optimization & Shared bias and joint
+process uncertainty \\
+Quantile / OT PRMs & Prefix distributions and bounds & Selection coverage and
+completer dependence \\
+Conformal / JOMI & Guarantees for specified sampling rules & Feasible PRM
+adaptation and adaptive RL assumptions \\
+Correlated-proxy robustness & Structured worst-case rewards & Construction from
+process supervision \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{A defensible candidate contribution}
+\emph{Optimization-aware uncertainty for process rewards}: compare pointwise
+intervals with structured or problem-level tubes; measure coverage after
+selection; determine whether coverage improvements reduce hacking at matched
+optimization pressure. Novelty remains provisional. An empirical paper could
+expose systematic post-selection undercoverage and a practical repair. A theory
+paper could characterize safe improvement and failure of marginal intervals.
+A combined paper would connect a restricted theorem to measured violations in
+real PRMs. No publication outcome is assumed.
+

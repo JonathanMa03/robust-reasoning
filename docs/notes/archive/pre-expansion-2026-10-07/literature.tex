@@ -1,0 +1,357 @@
+\section{Research question and search scope}
+\label{sec:review}
+\textbf{Question.} Can a calibrated, structured uncertainty set around a process
+reward model (PRM) reduce the gap between optimized proxy reward and genuine
+reasoning quality? The comparison is with strong existing pessimistic methods
+at matched compute, annotation budget, and policy movement.
+
+We re-searched literature on process supervision, reward hacking, reward confidence
+sets, pessimistic RLHF, distributional PRMs, selection-conditional conformal
+prediction, and robust optimization. Primary sources are linked in the references.
+Recent searches include September 2026 work and years distinguish initial preprints
+from verified conference publication where available.
+
+\subsection{What is already known, and what might be new}
+Static PRM accuracy and resistance to optimization are different properties.
+A policy or search procedure selects favorable prediction errors. Existing
+defenses include better supervision, reward shaping, adversarial examples,
+ensembles, confidence regions, and distributional rewards. Uncertainty around
+rewards and pessimistic optimization are established ideas. The
+potential contribution lies in the \emph{coverage target, geometry, and
+optimization regime} for process rewards. 
+
+Four close directions must shape our claims:
+\begin{enumerate}
+\item AdvPO already constructs reward confidence regions from last-layer features
+and optimizes pessimistically \cite{advpo}.
+\item PRM calibration and distributional PRMs already produce prefix-level
+success estimates and uncertainty bounds \cite{park,otprm}.
+\item Ensembles and reward-distribution DRO already give conservative effective
+rewards \cite{coste,unifying,rrlhf}.
+\item Selection-conditional conformal inference already addresses coverage after
+data-dependent selection \cite{jomi}. Applying it to PRMs is an adaptation.
+\end{enumerate}
+
+\section{Process supervision: what is being estimated?}
+\paper{Lightman et al., Let's Verify Step by Step (2023)}{
+Human labels supervise intermediate mathematical reasoning; PRM800K makes this
+supervision accessible. Process-supervised reward models outperform outcome
+supervision in the paper's candidate-selection experiments, and active learning
+improves annotation efficiency \cite{lightman}. This establishes the value of
+intermediate checks, and not immunity to an optimizing policy. PRM800K provides
+training data and a step-correctness target. A best-of-$N$ result should not be
+interpreted as an RL robustness guarantee.}
+
+\paper{Wang et al., Math-Shepherd (2023 preprint; ACL 2024)}{
+Automatically generated process supervision supports reranking and stepwise PPO,
+reducing dependence on human labels \cite{shepherd}. Completion-based labels
+must be interpreted carefully as continuation success depends on the generator.
+A confidence interval around that quantity need not cover intrinsic logical
+correctness. The uncertainty target must be fixed before choosing data.}
+
+\paper{Zhang et al., The Lessons of Developing PRMs (2025)}{
+The paper contrasts Monte Carlo labels, LLM judgments, and human labels and
+introduces consensus filtering. A correct answer can conceal flawed reasoning,
+and a verifier optimized for best-of-$N$ can behave like an outcome verifier
+\cite{lessons}. This motivates separate final-answer and process-error metrics.
+Qwen PRMs are practical baselines, but a minimum score is not itself calibrated
+uncertainty.}
+
+\paper{Xie et al., Noise-aware Learning (2026); Ding et al., SCAN (2025)}{
+Noise-aware learning uses reflection detection and iterative label refinement;
+SCAN combines selective Monte Carlo annotation with denoising \cite{noise,scan}.
+Both address corrupted synthetic supervision. Distinguish finite-rollout noise,
+completer dependence, and reward-model uncertainty. Better labels may improve
+the tube's center without characterizing coverage under optimization. Train
+competing uncertainty methods on the same corrected labels.}
+
+\paper{Pala et al., Error Typing for Smarter Rewards (2025)}{
+PathFinder-PRM separates mathematical and consistency error prediction from
+step-correctness scoring \cite{pathfinder}. Its reported 400K training samples
+should not be called 400K complete trajectories without checking the data unit.
+Error categories offer uncertainty features and stratified coverage diagnostics.
+Richer supervision is distinct from an explicit set and from resistance to an
+optimizing policy.}
+
+\subsection{Very recent developments: error location and recovery}
+\paper{Wang et al., Hierarchical Multi-Step Reward Models (2025; revised 2026)}{
+HRM learns from individual and consecutive reasoning steps, while hierarchical
+node compression augments tree-generated supervision \cite{hrm}. The method
+motivates modeling multi-step coherence and recovery. This is not evidence that
+ordinary prefix-conditioned PRMs ignore all history. A structured tube should
+be compared with improving the reward representation itself, especially when
+its claimed benefit concerns inter-step dependence.}
+
+\paper{Han et al., Cliff (September 2026 preprint)}{
+An off-the-shelf teacher locates the first mistake; Cliff assigns different
+advantages before and after that boundary \cite{cliff}. This is a recent
+credit-assignment comparator and suggests uncertainty over error locations.
+Its effectiveness depends on teacher judgments. First-error localization does
+not automatically resolve self-correction or teacher exploitation.}
+
+\paper{Gan et al., Reasoning State Propagation (September 30, 2026 preprint)}{
+RSP models transitions between valid and invalid reasoning states, including
+break and repair probabilities, linking process labels to outcomes \cite{rsp}.
+A weakest-step objective treats errors as irreversible; reasoning may recover.
+An extension could put uncertainty around break/repair transitions, requiring
+its own novelty comparison and more complex inference.}
+
+\paper{Fan et al., TIPS (September 29, 2026 preprint)}{
+Outcome-only RL trains a generative verifier to emit reasoning, step labels, and
+an outcome label \cite{tips}. This is relevant to supervision costs and
+generative-PRM baselines. Outcome rewards alone do not certify intermediate
+labels, so audit them separately. These late preprints were screened at abstract
+level; their gains are not independently reproduced evidence.}
+
+\section{How process rewards are hacked}
+\paper{Cheng et al., Stop Summation / PURE (NeurIPS 2025)}{
+PURE uses minimum-based credit assignment to reduce accumulation of favorable
+step errors \cite{pure}. It is a required baseline: an apparent uncertainty benefit
+could actually result from aggregation. Reported mitigation is not a universal
+guarantee against degenerate outputs. Test tubes with aggregation fixed, then
+cross methods with sum, mean, minimum, and product.}
+
+\paper{Zheng et al., CoLD (2025; revised May 2026)}{
+CoLD targets length bias through a length adjustment, a learned bias estimator,
+and joint training informed by counterfactual reasoning \cite{cold}. Length and
+paraphrase transformations can probe our tube and motivate bias directions.
+A fitted estimator is not an identified causal effect without assumptions.}
+
+\paper{Tiwari et al., Reward Under Attack (2026)}{
+Static perturbations, adversarial optimization, and RL expose PRM weaknesses.
+In the studied AIME setup, the authors report near-perfect PRM scores while
+answer accuracy stays below 4\% \cite{attack}. PRM-BiasBench and released code
+are useful resources. This is evidence about specific models and settings, not
+every PRM. Attack our robust score adaptively, not only the original reward.}
+
+\paper{Juneja et al., Adversarial Training for PRMs (ICML 2026)}{
+APRM co-trains an error generator and verifier to expose new failures
+\cite{aprm}. It is a strong hard-negative comparator. Its oracle and game
+formulation require assumptions: own-player strong concavity alone does not
+imply strong monotonicity in general-sum games, and neural PPO parameters do
+not automatically inherit policy-space concavity. We use the empirical method
+without importing a blanket neural-training convergence guarantee.}
+
+\paper{Pathmanathan and Huang, REFORM (2025 preprint; ACL 2026)}{
+Reward-guided controlled decoding discovers falsely scored responses and uses
+them to repair preference reward models \cite{reform}. This motivates acquiring
+labels at optimizer-discovered errors. Compare tube construction against spending
+the same labels on hard-negative retraining; otherwise improved data alone
+could explain a gain. Its preference setting differs from process verification.}
+
+\paper{Wallace et al., Universal Adversarial Triggers (2019)}{
+Optimized token sequences expose learned NLP vulnerabilities \cite{triggers}.
+They motivate suffix and discrete-token attacks, but do not establish transfer
+to a particular PRM. Distinguish content attacks from parser or delimiter exploits.}
+
+\section{Reward hacking theory and optimization pressure}
+\paper{Skalse et al., Defining and Characterizing Reward Hacking (2022)}{
+Hackability is defined through policy-order reversals between proxy and true
+returns. Rich policy classes severely restrict nontrivial proxies that never
+reverse preferences \cite{skalse}. This does not prove every training run hacks.
+It motivates conditional guarantees over restricted or reachable policy classes
+rather than globally perfect alignment.}
+
+\paper{Gao et al., Scaling Laws for Reward Model Overoptimization (2022)}{
+Experiments with a stronger gold reward model show proxy scores increasing after
+gold scores deteriorate \cite{gao}. Use optimization-pressure curves, not one
+checkpoint. The gold model remains a proxy for human intent; exact mathematics
+and independent step audits are preferable where available. Empirical scaling
+laws are not universal laws for PRM reasoning.}
+
+\paper{Laidlaw et al., Correlated Proxies (2024 preprint; ICLR 2025)}{
+Proxy--true correlation under a reference policy supports reward-hacking theory
+and occupancy-measure regularization \cite{correlated}. Reference-distribution
+correlation is distinct from pointwise validity in new states. For our project,
+ask how a reward-set assumption yields a useful bound under changing reasoning
+prefix distributions.}
+
+\paper{Liu, Sun, and Zheng, Robust Optimization with Correlated Proxies (ICLR 2026)}{
+The paper optimizes against worst-case rewards constrained by proxy correlation
+and studies known linear reward features \cite{robustcorr}. Neither correlation
+sets nor generic max--min hacking defenses are new. A PRM contribution needs
+process-specific geometry, construction from supervision, or guarantees and
+evidence under selection and on-policy shifts.}
+
+\paper{Liu et al., Robust General Utility for RL (August 2026 preprint)}{
+Utility functionals of occupancy are uncertain; algorithms address different
+utility regimes \cite{generalutility}. This is relevant to nonlinear PRM
+aggregation. It was screened at abstract level: inspect the full assumptions
+before using its stationarity results. Generic robust utility optimization is
+already prior work.}
+
+\section{Closest prior work on uncertainty and pessimism}
+\label{sec:closest}
+\paper{Coste et al., Reward Model Ensembles (2023 preprint; revised 2024)}{
+Mean, worst-case, and uncertainty-weighted ensembles are tested under best-of-$N$
+and PPO, including noisy labels \cite{coste}. Pessimism reduces overoptimization
+in the tested synthetic reward setting. Shared data or representations can make
+members confidently wrong together. Include minimum-member and variance-penalty
+baselines; simply using a lower ensemble score is not a new contribution.}
+
+\paper{Zhang et al., AdvPO (2024)}{
+AdvPO derives uncertainty from last-layer embeddings, constructs a confidence
+region, and performs adversarial policy optimization \cite{advpo}. This is the
+closest predecessor to a feature-based ellipsoidal tube. Theory assumes reward
+approximation and feature structure; its practical radius is tuned. Potential
+advances are process-level joint coverage, calibrated misspecification, and
+selected-trajectory audits. Transferring its geometry to a PRM alone is a limited
+extension.}
+
+\paper{Yan et al., Reward-Robust RLHF (2024)}{
+Bayesian reward ensembles and a nominal--pessimistic tradeoff already model
+uncertain rewards \cite{rrlhf}. An ensemble distribution is a modeling device,
+not automatic coverage of truth. Check coverage, sharpness, and systematic bias
+independently.}
+
+\paper{Park et al., Know What You Don't Know (2025)}{
+Quantile regression calibrates PRM-derived continuation-success probabilities
+for a specified generator. Bounds support adaptive inference budgets
+\cite{park}. This is directly relevant, but its target differs from intrinsic
+step correctness. Calibration and efficiency do not automatically give joint
+coverage across selected candidates or an RL hacking guarantee. A faithful
+implementation is a required baseline.}
+
+\paper{Ma et al., Distributional PRMs via Conditional Optimal Transport (May 2026)}{
+Conditional OT learns a monotone conditional quantile map using PRM features
+and rollout-success targets \cite{otprm}. It offers coherent quantiles and flexible
+confidence levels. Quantile monotonicity differs from finite-sample coverage
+after selection; its target also changes with the completer. Our advance must
+be more specific than learning reward distributions or confidence bounds.}
+
+\paper{Yu et al., From Curiosity to Caution (ICLR 2026)}{
+Caution penalizes prediction-error novelty to mitigate best-of-$N$ reward
+hacking, with empirical and simplified theoretical analysis \cite{caution}.
+Novelty is not logical error: unusual correct reasoning may be penalized while
+familiar wrong reasoning evades it. Compare calibrated residual uncertainty
+against novelty penalties at matched scoring cost.}
+
+\paper{Hahami et al., A Unifying Lens on Reward Uncertainty (June 2026)}{
+A distributional reward yields an entropic pessimistic score; mean, minimum,
+and variance penalties arise as limits or approximations \cite{unifying}.
+Reward robustness and policy KL have distinct roles. Entropic aggregation is
+already prior work. Joint process-step distributions or policy-dependent
+coverage could extend it, provided model misspecification is addressed.}
+
+\paper{Zhou et al., PRISM (ACL 2026); Duan et al., BNRM (2026 preprint)}{
+PRISM uses Gaussian mixtures to represent preference heterogeneity and
+uncertainty; BNRM uses Bayesian nonnegative latent factors \cite{prism,bnrm}.
+These concern preference rewards rather than certified process correctness.
+Rich output distributions need not cover reasoning failures. Separate preference
+diversity, annotation variability, and epistemic errors.}
+
+\section{Statistical tools for constructing a meaningful set}
+\paper{Lakshminarayanan et al., Deep Ensembles (2017)}{
+Independently trained predictors provide practical uncertainty estimates
+\cite{deepensemble}. Seeds, data resamples, and backbones give different diversity.
+Measure systematic common errors. Dispersion is an input to calibration, not a
+confidence-set theorem by itself.}
+
+\paper{Abbasi-Yadkori et al., Linear Stochastic Bandits (2011)}{
+Self-normalized martingale bounds support confidence ellipsoids for adaptive
+features under a linear conditional mean and noise assumptions \cite{abbasi}.
+Changing neural features, logistic labels, or corrupted annotations require
+new arguments. A frozen-feature regression setting isolates these assumptions.}
+
+\paper{Romano et al., Conformalized Quantile Regression (2019)}{
+Conformal calibration corrects learned quantiles to give marginal prediction
+coverage under exchangeability \cite{cqr}. It covers future observed targets,
+not automatically conditional means or whole reward functions. Calibrate by
+problem rather than treating correlated steps as independent examples.}
+
+\paper{Jin and Ren, Confidence on the Focal (2024 preprint; JRSS B 2025)}{
+Selection-conditional inference covers focal test units chosen by data-dependent
+rules, including optimization-based selection \cite{jomi}. This is close to PRM
+best-of-$N$. An adaptation must check rule symmetry, target, and computational
+cost. It does not automatically cover an indefinitely co-adapting policy and
+verifier.}
+
+\paper{Tibshirani et al., Covariate Shift (2019); Barber et al., Beyond Exchangeability (2022)}{
+Weighted and nonexchangeable conformal methods address specified shifts
+\cite{weighted,beyond}. Density ratios, support overlap, and a stable conditional
+label mechanism are substantive assumptions. Estimated or clipped weights do
+not preserve exact coverage automatically. Changing the completer changes a
+rollout-success target, so that is not mere covariate shift.}
+
+\paper{Angelopoulos et al., Conformal Risk Control (2022)}{
+Calibration extends to expected monotone losses \cite{crc}. This motivates
+controlling false acceptance of bad steps. The theorem must match the loss and
+monotonicity: selecting a different trajectory at each threshold can break
+monotonicity. Start with thresholded accept/reject rules on fixed scores.}
+
+\paper{Bao et al., Model Selection for Conformalized Robust Optimization (2025)}{
+Prediction sets, model selection, and downstream robust decision quality are
+connected \cite{croms}. A narrow valid interval is not necessarily best for a
+decision. Decision-aware calibration is prior work; report accuracy and regret
+alongside width.}
+
+\subsection{Late statistical results to monitor}
+Two 2026 preprints were screened: a testing view of conformal universality and
+impossibility \cite{conformaltest}, and finite-sample CQR bounds including
+fixed-score calibration under known shift \cite{cqrlimits}. They may inform
+coverage--efficiency lower bounds. Full assumptions need inspection; no theorem
+below is attributed to these abstracts.
+
+\section{Robust optimization and reward shaping}
+\paper{Duchi and Namkoong, Uniform Performance via DRO (2018 preprint)}{
+Distributional ambiguity emphasizes difficult examples and tail behavior, with
+statistical tradeoffs \cite{duchi}. Robust PRM training can reweight ordinary and
+discovered failures, but empirical reweighting cannot create unseen reasoning
+behaviors. A set of data distributions differs from a set of reward functions.}
+
+\paper{Iyengar, Robust Dynamic Programming (2005)}{
+Rectangular transition uncertainty supports robust dynamic programming
+\cite{iyengar}. The structural lesson transfers: independent local adversarial
+choices and one globally consistent model are different problems. Text
+transitions may be known while PRM reward uncertainty is coupled. Do not assume
+a robust Bellman recursion for an arbitrary nonrectangular tube.}
+
+\paper{Ng, Harada, and Russell, Policy Invariance (1999)}{
+Potential-based shaping preserves policy preferences under appropriate boundary
+conditions \cite{shaping}. Where outcome verification is reliable, a PRM can
+assist learning as a potential. This differs from replacing rewards with
+pessimistic estimates. It does not remove verifier errors or promise faster
+learning.}
+
+\section{Evaluation resources and evidence gaps}
+ProcessBench tests earliest-error identification on expert-annotated mathematical
+solutions \cite{processbench}; PRMBench tests dimensions including simplicity,
+soundness, and sensitivity \cite{prmbench}; Socratic-PRMBench adds reasoning-pattern
+diagnostics \cite{socratic}. PRM-BiasBench supplies controlled perturbations
+\cite{attack}. Static performance cannot replace optimization stress tests.
+
+\begin{longtable}{p{0.20\linewidth}p{0.35\linewidth}p{0.36\linewidth}}
+\toprule
+Family & Established capability & What our study must resolve \\
+\midrule
+\endhead
+Process supervision & Intermediate verification & What quantity the tube covers \\
+Label denoising & Better synthetic labels & Coverage after optimization \\
+PURE / shaping & Better credit assignment or outcome invariance & Tube benefits
+with aggregation held fixed \\
+Ensembles / AdvPO & Pessimistic reward optimization & Shared bias and joint
+process uncertainty \\
+Quantile / OT PRMs & Prefix distributions and bounds & Selection coverage and
+completer dependence \\
+Conformal / JOMI & Guarantees for specified sampling rules & Feasible PRM
+adaptation and adaptive RL assumptions \\
+Correlated-proxy robustness & Structured worst-case rewards & Construction from
+process supervision \\
+\bottomrule
+\end{longtable}
+
+\subsection{A defensible candidate contribution}
+\emph{Optimization-aware uncertainty for process rewards}: compare pointwise
+intervals with structured or problem-level tubes; measure coverage after
+selection; determine whether coverage improvements reduce hacking at matched
+optimization pressure. Novelty remains provisional. An empirical paper could
+expose systematic post-selection undercoverage and a practical repair. A theory
+paper could characterize safe improvement and failure of marginal intervals.
+A combined paper would connect a restricted theorem to measured violations in
+real PRMs. No publication outcome is assumed.
+
+\subsection{Reading order}
+Read Part II, then Lightman and the Qwen lessons for targets; PURE and Reward
+Under Attack for failures; AdvPO, Park, conditional OT, Caution, and reward
+uncertainty unification for close methods; JOMI and correlated-proxy robustness
+for statistical distinctions. Part III develops concrete designs.

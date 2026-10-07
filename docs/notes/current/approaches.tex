@@ -1,0 +1,625 @@
+\section{From the line metaphor to a research object}
+\label{sec:tube}
+Along a trajectory, the PRM produces the line
+$\hat{\bm r}(\tau)=(\hat r(h_1),\ldots,\hat r(h_T))$. A tube should contain
+plausible target rewards, not merely decorate that line with arbitrary error bars.
+Define lower and upper envelopes $L(h),U(h)$, a domain $\mathcal H_B$ indexed by
+an optimization budget $B$, and a set of functions
+\[
+ \U_B=\{r:\mathcal H_B\to[0,1]:L(h)\le r(h)\le U(h),\quad
+ r\text{ satisfies specified coupling constraints}\}.
+\]
+The coupling says which combinations of step errors are simultaneously plausible.
+Independent intervals form a box; shared parameters form a correlated tube.
+This distinction is the main geometric research question.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[x=0.92cm,y=4cm]
+\draw[-{Stealth}] (0,0) -- (7.3,0) node[right]{step};
+\draw[-{Stealth}] (0,0) -- (0,1.03) node[above]{reward};
+\fill[blue!12] (1,.88)--(2,.94)--(3,.84)--(4,.95)--(5,.98)--(6,.92)--(7,.87)
+ --(7,.35)--(6,.18)--(5,.28)--(4,.62)--(3,.56)--(2,.73)--(1,.72)--cycle;
+\draw[blue,dashed] (1,.88)--(2,.94)--(3,.84)--(4,.95)--(5,.98)--(6,.92)--(7,.87);
+\draw[blue,dashed] (1,.72)--(2,.73)--(3,.56)--(4,.62)--(5,.28)--(6,.18)--(7,.35);
+\draw[blue,thick] (1,.80)--(2,.84)--(3,.70)--(4,.79)--(5,.87)--(6,.78)--(7,.73);
+\draw[orange!85!black,thick] (1,.79)--(2,.81)--(3,.65)--(4,.74)--(5,.43)--(6,.30)--(7,.52);
+\node[blue,anchor=west] at (7,.86) {$U$};
+\node[blue,anchor=west] at (7,.72) {$\hat r$};
+\node[blue,anchor=west] at (7,.34) {$L$};
+\node[orange!85!black,anchor=west] at (7,.51) {$r^*$};
+\foreach \x in {1,...,7}{\draw (\x,0.01)--(\x,-.01) node[below]{\x};}
+\end{tikzpicture}
+\caption{Illustrative tube with heterogeneous width. All values are schematic,
+not measured results. Drawing a target line inside the band does not establish
+statistical coverage or describe which correlated functions are admissible.}
+\end{figure}
+
+\subsection{The design specification}
+Before implementing any method, specify:
+\begin{enumerate}
+\item \textbf{Target:} human/prover step validity, cumulative prefix validity,
+fixed-completer success probability, or task utility. We recommend intrinsic
+step/prefix validity as the primary PRM target and independent answer correctness
+as the task metric. Use a separate fixed-completer track for rollout calibration.
+\item \textbf{Domain:} a finite candidate pool, trajectories from a frozen
+policy, a bounded policy family, or all feature vectors in a known domain.
+\item \textbf{Geometry:} independent box, shared parameter ellipsoid,
+low-rank bias set, budgeted deviations, or a joint reward distribution.
+\item \textbf{Assurance:} empirical coverage, marginal prediction coverage,
+candidate-set coverage, uniform function coverage, or a policy improvement bound.
+\item \textbf{Use:} robust reranking, trajectory-level RL, robust policy-level
+improvement, or task-preserving shaping. These are different objectives.
+\end{enumerate}
+The methods below are proposals. Their novelty and effectiveness are hypotheses.
+
+\section{Approach A: problem-level calibration of candidate tubes}
+\label{sec:approachA}
+\textbf{Purpose.} Establish a practical baseline and diagnose whether selection
+breaks ordinary coverage. This is an empirical route with a modest, explicit
+exchangeability guarantee for a frozen candidate-generation protocol.
+
+\subsection{Construction}
+Train a center $\mu(h)\in[0,1]$ and positive scale $s(h)\ge s_{\min}>0$ using
+only training problems. Scale candidates include ensemble disagreement,
+last-layer leverage, predicted residual magnitude, or quantile widths. Fix the
+scorer, generator, parser, and maximum budget $B$ before calibration.
+For each calibration problem $i$, generate all $B$ candidates and collect target
+labels $y_{ijt}$ for their steps. Problems, not individual steps, are the
+exchangeable calibration units. Define
+\[
+ S_i^-=\max_{j\le B,t\le T_{ij}}\frac{\mu(h_{ijt})-y_{ijt}}{s(h_{ijt})},
+ \qquad
+ S_i^+=\max_{j\le B,t\le T_{ij}}\frac{y_{ijt}-\mu(h_{ijt})}{s(h_{ijt})}.
+\]
+On $m$ calibration problems, let $q^\pm$ be the
+$\lceil(m+1)(1-\alpha_\pm)\rceil$th order statistic of $S_i^\pm$, augmented
+with $+\infty$ if the index exceeds $m$. Replace negative quantiles by zero
+to make widths nonnegative. Set $\alpha_-+\alpha_+=\alpha$ and
+\[
+ L(h)=\max\{0,\mu(h)-q^-s(h)\},\qquad
+ U(h)=\min\{1,\mu(h)+q^+s(h)\}.
+\]
+A one-sided version spends all the error budget on $S^-$ and reports only a
+lower prediction bound; it must not be called a two-sided confidence tube.
+
+Under exchangeable problem blocks, independent model fitting, and the same
+frozen generation/labeling protocol, split-conformal ranks and a union bound give
+\[
+ \Prob\{L(h_{jt})\le y_{jt}\le U(h_{jt})\text{ for all candidates and steps
+ in a new block}\}\ge1-\alpha.
+\]
+This adapts standard conformal reasoning \cite{cqr}; it is not a new theorem.
+Within-block steps and candidates can be dependent. Any reranker choosing from
+that fixed block inherits this containment event. The probability is marginal
+over calibration and new problem blocks, not conditional coverage for every
+problem or a confidence band over the whole reward function.
+
+\subsection{The target problem, and how to handle it}
+If $y$ is a binary validity label, this construction covers the \emph{realized
+label}. Many honest intervals may reach zero, making lower-bound selection
+uninformative. That is a result to report, not something to fix by relabeling the
+interval as epistemic uncertainty. Use sets of valid/invalid labels or abstention
+for this track; evaluate informativeness through singleton-set frequency and
+false acceptance.
+
+For a success-probability track, keep completer $\pi_c$ fixed and label each
+prefix with $K$ independent completion outcomes. Calibration then covers future
+rollout estimates $\tilde p$, not $p_{\pi_c}$. If the new block has at most
+$M=BT_{\max}$ prefixes, Hoeffding and a union bound give an additional allowance
+\[
+ \eta_K=\sqrt{\frac{\log(2M/\delta_{\rm MC})}{2K}}.
+\]
+Expanding each interval by $\eta_K$ covers the true fixed-completer success
+probabilities in that block with probability at least
+$1-\alpha-\delta_{\rm MC}$. Independent Bernoulli rollouts, a correct answer
+checker, and a fixed finite cap are assumptions. This does not convert success
+probabilities into intrinsic step correctness.
+
+\subsection{Using the tube}
+For the rectangular set and a coordinatewise nondecreasing aggregation $G$,
+rerank using
+\[
+ G(L(h_1),\ldots,L(h_T)).
+\]
+Repeat for nominal, calibrated-center,
+and uncertainty-penalized baselines with the same $G$. A candidate-wise lower
+reward may be overly conservative; it should be compared with a shared-function
+set in Approach B.
+
+\subsection{Tests, limitations, and novelty}
+Sweep nested fixed pools with $N\le B$. Compare stepwise calibration,
+trajectory-block calibration, full candidate-block calibration, a union-bound
+correction, and a selection-conditional/JOMI adaptation \cite{jomi}. Calibrating
+the selected candidate directly requires the selection protocol to be fixed
+without circular reuse of its calibration labels.
+
+Problem blocks from an RL-updated generator or a beam search influenced by the
+new calibrated reward do not automatically match the frozen-pool guarantee.
+Block maxima can be too conservative and annotation cost scales with candidate
+count. A publishable result would need a useful improvement in selected-path
+coverage and correctness at matched cost, or a clear failure characterization.
+The max-score conformal construction itself is standard.
+
+\section{Approach B: a coupled function tube from frozen features}
+\label{sec:approachB}
+\textbf{Purpose.} Model one shared source of reward error across steps and
+policies, providing the cleanest initial theoretical route. AdvPO is close prior
+work \cite{advpo}; the proposed extension is process coupling and validation.
+
+\subsection{A tractable model and an exact induced tube}
+Start with a frozen feature map $\psi(h)\in\R^d$ and linear real-valued reward
+$r_w(h)=\psi(h)^\top w$. Fit a regularized head $\hat w$ and let
+\[
+ V=\lambda I+\sum_{i=1}^n\psi_i\psi_i^\top,
+ \quad \mathcal C=\{w:\norm{w-\hat w}_V\le\beta_n\},
+ \quad \U=\{r_w:w\in\mathcal C\}.
+\]
+Here $\norm{u}_V=\sqrt{u^\top Vu}$. The induced pointwise envelope is
+\[
+ \psi(h)^\top\hat w\ \pm\ \beta_n\sqrt{\psi(h)^\top V^{-1}\psi(h)}.
+\]
+Take $\lambda>0$ so that $V$ is invertible. This is a projection of one ellipsoid;
+arbitrary simultaneous choices of the
+pointwise endpoints are not allowed.
+
+For $y_i=\psi_i^\top w^*+\varepsilon_i$, predictable frozen features,
+conditionally $R_\varepsilon$-sub-Gaussian noise, $\norm{w^*}\le S$, and
+regularized least squares, a standard confidence choice is
+\[
+ \beta_n=R_\varepsilon\sqrt{2\log\left(
+ \frac{\det(V)^{1/2}}{\det(\lambda I)^{1/2}\delta}\right)}+\sqrt\lambda S.
+\]
+Self-normalized theory supplies adaptive-data confidence under these assumptions
+\cite{abbasi}. This does not justify an unrestricted neural PRM guarantee.
+Binary conditional means can fit this model only if the linear mean is correctly
+specified. Labels systematically supplied by a biased judge violate it.
+
+For probability outputs $\sigmoid(\psi^\top w)$, monotonicity yields sigmoid
+transforms of the logit envelopes \emph{if} the parameter confidence set is
+valid. Least-squares confidence theory does not automatically validate a
+logistic head. Hessian/Laplace ellipsoids can be empirical baselines; a formal
+generalized-linear analysis must establish its own assumptions and radius.
+
+\subsection{Joint geometry and robust scoring}
+For a trajectory feature matrix $\Psi_\tau$ whose rows are $\psi(h_t)^\top$,
+the induced covariance shape is
+\[
+ \Sigma_\tau=\Psi_\tau V^{-1}\Psi_\tau^\top.
+\]
+Repeated steps share uncertainty rather than generating new independent errors.
+For a linear aggregation $a^\top\bm r$, where $a$ is fixed for the trajectory,
+the exact worst-case score for the unrestricted linear head is
+\[
+ \inf_{w\in\mathcal C}a^\top\Psi_\tau w
+ =a^\top\Psi_\tau\hat w-\beta_n\sqrt{a^\top\Sigma_\tau a}.
+\]
+This is a support-function identity, not a novel PRM theorem. If rewards must
+stay in $[0,1]$, either ensure the ellipsoid satisfies the domain bounds or
+intersect it with those constraints and solve the resulting constrained problem.
+Clipping outputs or using sigmoid rewards generally destroys the linear identity.
+For a minimum objective,
+$\inf_w\min_t r_w(h_t)=\min_t\inf_w r_w(h_t)$; for products and nonlinear
+means, simultaneous endpoint substitution need not be exact.
+
+Policy-level pessimism differs from per-trajectory pessimism. With
+$\bar\psi_\pi=\E_\pi\sum_t a_t\psi(h_t)$, the former equals
+\[
+ \bar\psi_\pi^\top\hat w-\beta_n\norm{\bar\psi_\pi}_{V^{-1}},
+\]
+while the latter subtracts
+$\beta_n\E_\pi\norm{\sum_t a_t\psi(h_t)}_{V^{-1}}$.
+Jensen makes the latter more conservative. Report which objective is optimized.
+
+\subsection{Misspecification and practical construction}
+An honest extension is
+\[
+ r^*(h)=\psi(h)^\top w^*+m(h),\quad |m(h)|\le b_{\rm mis}(h).
+\]
+The resulting set couples parameter error but allows specified residual error.
+Estimate residual scales on separate problems containing adversarial and
+on-policy traces. Calling that estimate a uniform bound still requires a
+coverage argument. A residual floor can protect against zero ensemble variance,
+but should be evaluated through failures rather than assumed effective.
+
+Implement frozen representations, ridge heads, then independently trained
+low-rank heads or adapters. Use Cholesky solves rather than explicitly forming
+$V^{-1}$. Training needs feature statistics; a full $d\times d$ matrix and
+quadratic-form scoring can be expensive. Compare dimension reduction,
+diagonal approximations, and low-rank approximations against full geometry.
+Do not hide the cost of computing PRM features.
+
+\subsection{Research payoff and risks}
+Compare a shared ellipsoid with its rectangular envelope at matched marginal
+width and matched joint coverage. Test common-mode bias, repeated steps, and
+rare logical transformations. The contribution could be a characterization of
+when coupling avoids excessive conservatism or controls policy exploitation.
+The main risks are feature misspecification, falsely small radii, and head-only
+diversity missing shared backbone errors. A generic last-layer ellipsoid is
+already covered by AdvPO and confidence-set literature.
+
+\section{Approach C: structured nuisance and budgeted error tubes}
+\textbf{Purpose.} Cover systematic shared biases that a seed ensemble misses.
+This route combines empirical attacks with an interpretable robust set.
+
+Let $g(h)$ describe validated nuisance directions: step duplication, verbosity,
+unjustified certainty, answer-format markers, or question--solution mismatch.
+The last is a corruption detector, not a semantics-preserving nuisance. Define
+\[
+ r_{u,e}(h)=\hat r(h)-g(h)^\top u-e(h),\quad
+ \norm{u}_M\le\rho_b.
+\]
+For a probability target, intersect these constraints with $0\le r_{u,e}(h)\le1$;
+the unconstrained penalties below are then conservative bounds and need not be
+the exact constrained optimum. Alternatively, define the set on real-valued
+logits and optimize with the explicit link function.
+One $u$ applies to the full trajectory or policy; specify that scope. Derive
+$g$ from paired transformations whose labels are checked, not arbitrary text
+embeddings assumed to represent causality. CoLD motivates the known-bias case
+\cite{cold}. Put a zero-centered uncertainty set around unexplained effects;
+an estimated known bias should first correct the center.
+
+For nonnegative aggregation weights, an additional budgeted residual model is
+\[
+ |e_t|\le b_t,\qquad\sum_t\frac{|e_t|}{b_t}\le\Gamma,
+ \quad 0\le\Gamma\le T,
+\]
+omitting zero-width coordinates. Its worst-case linear penalty is the sum of the
+largest $\lfloor\Gamma\rfloor$ values of $a_tb_t$, plus the fractional part
+times the next largest. This standard robust-set geometry interpolates between
+no residual penalty and a rectangular all-steps penalty.
+
+\textbf{Construction protocol.} Create paired correct rewrites and validated
+logical corruptions on training problems; fit bias features and residual scales;
+estimate a problem-level deviation budget on a disjoint calibration split;
+compare an independent box, a shared bias term, and a combined set. If a repeated
+systematic mistake affects every step, a small $\Gamma$ is invalid. Use the shared
+bias component for such common modes and audit the remaining budget assumptions.
+
+\textbf{Potential contribution.} Show that correlated nuisance uncertainty covers
+known failure directions at smaller useful widths than an unstructured box,
+then test held-out attacks. Compare against CoLD and hard-negative retraining at
+equal label cost. Primary risks are unreliable semantic validation and attacks
+outside $g$'s span. Token-count penalties alone are a baseline, not the new method.
+
+\section{Approach D: a joint reward distribution and robust risk}
+\textbf{Purpose.} Preserve dependencies in a distributional PRM rather than
+attach independent distributions to each step. This is an optional extension
+after simpler tube methods work; scalar distributional pessimism is prior work
+\cite{unifying,otprm,prism}.
+
+Fit a joint predictive distribution $p(\bm r\mid\tau)$ using shared latent
+parameters, low-rank factors, or ensemble trajectories. For a specified $G$,
+consider a reward-distribution ambiguity set
+\[
+ \mathcal Q_\rho(\tau)=\{Q:\KL(Q\|p(\bm r\mid\tau))\le\rho\}.
+\]
+Its robust expected aggregate is
+\[
+ \inf_{Q\in\mathcal Q_\rho}\E_Q G(\bm r)
+ =\sup_{\eta>0}\{-\eta\log\E_p e^{-G(\bm r)/\eta}-\eta\rho\},
+\]
+under the standard duality/integrability conditions, with boundary limits
+included where needed. The penalized form with fixed $\eta$ omits $-\eta\rho$;
+it is a different problem. This variational identity is established robust-risk
+machinery, not a novel result.
+
+For real-valued Gaussian rewards and linear $G=a^\top\bm r$, the penalized
+score is
+$a^\top\bm\mu-(a^\top\Sigma a)/(2\eta)$. Correlation changes the penalty;
+dropping off-diagonal terms can severely underestimate shared error. A Gaussian
+distribution is not a valid bounded probability distribution unless transformed
+or truncated, in which case the simple expression need not hold. Monte Carlo
+log-sum-exp estimates must be checked for tail-sampling error.
+
+\textbf{Calibration and experiments.} Train distributional heads on repeated
+rollouts in the fixed-completer track or repeated independent annotations in
+the validity track, accounting for what those repetitions measure. Compare
+independent versus joint models, entropic risk versus quantile bounds, and
+conservative distributions versus the same center without penalties. Measure
+tail fit after selection and shared errors. Distributional variability alone is
+not epistemic confidence; a perfectly fitted wrong label mechanism remains
+wrong. Publishability would require a process-specific gain, not re-deriving
+scalar entropic rewards.
+
+\section{Approach E: optimize, audit, and update the tube}
+\textbf{Purpose.} Make uncertainty estimation respond to the distribution created
+by reward optimization. This is the highest-cost combined route.
+
+Define an optimization regime by initial policy, allowed updates, KL/length
+caps, algorithm, and budget. A reachable family $\Pi_B$ induces prefix or
+trajectory distributions, rather than an unspecified ball around the training
+data. Empirically sample a mixture of checkpoints, best-of-$N$ winners, beam
+prefixes, and attack-generated traces. A mixture covers its sampled modes;
+it does not certify every reachable policy.
+
+\begin{enumerate}
+\item Fit the initial PRM and set on training problems. Freeze its parameters
+and calibration during a bounded policy-update phase.
+\item Optimize the robust score and separately attack it. Select audit examples
+with high robust score, low ensemble disagreement despite suspicious reasoning,
+and coverage failures; include random on-policy examples to avoid blind sampling.
+\item Obtain independent validity labels or fixed-completer rollout targets.
+Keep a fresh evaluation stream untouched by reward updates.
+\item Retrain the center or uncertainty model, then recalibrate on fresh data.
+Compare with equal-budget center-only retraining.
+\item Validate new policies after the update; use a predefined accept/defer rule
+when evidence of true improvement or valid coverage is insufficient.
+\end{enumerate}
+
+If policy $\pi_k$ is fixed before fresh calibration and test blocks are drawn
+under it, a per-round guarantee conditional on the previous history can be
+combined with $\sum_k\alpha_k\le\alpha$ through a union bound. This only covers
+the specified audited deployment blocks. It does not certify policy $\pi_{k+1}$
+trained after that calibration, nor reuse of calibration labels to choose among
+arbitrary new policies. Uniform function sets or properly justified sequential
+inference are needed for broader claims.
+
+Weighted calibration is another comparator when labels have a fixed conditional
+mechanism and reference/on-policy density ratios are available \cite{weighted}.
+In text, action-product ratios can be extremely variable. Report effective
+sample size $(\sum_iw_i)^2/\sum_iw_i^2$, overlap, and clipping bias. Holding the
+completer fixed is necessary for the success-probability target; updating the
+completer changes that target.
+
+\textbf{Potential contribution.} Measure and repair post-optimization coverage
+loss, showing fewer confidently wrong selected trajectories than static sets,
+ensembles, and hard-negative training. Main risks are label cost, feedback loops,
+catastrophic shared verifier mistakes, and moving targets. Treat an adversarial
+curriculum as empirical adaptation, not automatic uniform robustness.
+
+\section{Theoretical characterization: established lemmas and open targets}
+\label{sec:theory}
+The propositions below are elementary supporting results derived for these notes.
+They are not claimed as original publishable theorems. They identify the
+assumptions a stronger result must supply.
+
+\begin{proposition}[Rectangular monotone aggregation]
+For a finite trajectory and the independent box $\prod_t[L_t,U_t]$, if $G$ is
+coordinatewise nondecreasing, then
+$\inf_{\bm r\in\prod_t[L_t,U_t]}G(\bm r)=G(\bm L)$.
+\end{proposition}
+\begin{proof}
+Every feasible vector is coordinatewise at least $\bm L$, and $\bm L$ is
+feasible. Monotonicity gives both inequalities. For a coupled set $\bm L$ may
+not be feasible; its value then remains a conservative lower bound, not an
+exact robust score.
+\end{proof}
+
+\begin{proposition}[A simultaneous tube protects a selected candidate]
+Suppose $R_j^*\in[L_j,U_j]$ for every member of a finite candidate pool.
+Let $\hat j\in\arg\max_jL_j$, and let $j^*\in\arg\max_jR_j^*$. Then
+\[
+ R_{\hat j}^*\ge L_{\hat j},\qquad
+ R_{j^*}^*-R_{\hat j}^*\le U_{j^*}-L_{j^*}.
+\]
+\end{proposition}
+\begin{proof}
+$R_{\hat j}^*\ge L_{\hat j}\ge L_{j^*}$ and
+$R_{j^*}^*\le U_{j^*}$. Subtract. The simultaneous containment event is needed
+before selection. For half-widths bounded by $\epsilon$, regret is at most
+$2\epsilon$. If these are process-aggregate rewards, the bound concerns that
+aggregate and not automatically final-answer correctness.
+\end{proof}
+
+\subsection{Why marginal coverage alone fails}
+Construct a distribution where a fraction $\alpha$ of candidates are wrong,
+receive score one, and receive an interval that excludes the true reward zero.
+All other candidates are correct, score $0.8$, and are covered. Random-candidate
+coverage is exactly $1-\alpha$. Best-of-$N$ chooses an uncovered wrong candidate
+whenever one occurs, with probability $1-(1-\alpha)^N$. At $\alpha=0.05$,
+$N=100$, this is about $0.994$. Ties are resolved within wrong candidates.
+This is a constructed counterexample, not a measured PRM failure. It illustrates
+why selection-aware theory is necessary even before RL.
+
+\begin{proposition}[Robust improvement against a reference]
+If the true reward function belongs to a fixed set $\U$, then for every policy
+\[
+ \Delta_{\U}(\pi):=\inf_{r\in\U}\{J_r(\pi)-J_r(\pi_0)\}
+ \le J_{r^*}(\pi)-J_{r^*}(\pi_0).
+\]
+Therefore $\Delta_{\U}(\pi)>0$ certifies improvement for that target reward.
+\end{proposition}
+\begin{proof}
+Evaluate the infimum at $r^*$. The same containment event works for adaptively
+chosen policies if it is a uniform function-containment event on their domain.
+\end{proof}
+This reference-centered objective is preferable to comparing two separate
+pessimistic values: improvement in $\inf_rJ_r(\pi)$ does not alone prove
+improvement in the true return. Approximate occupancy estimates, optimization
+error, and uncertain labels each require an explicit error allowance.
+
+\subsection{A shift-aware bound with transparent assumptions}
+Suppose a bounded trajectory utility satisfies $R^*=\hat R+e$ and
+$\E_{P_0}e^2\le\epsilon^2$, with $P_\pi\ll P_0$.
+For $w=dP_\pi/dP_0$, Cauchy--Schwarz gives
+\[
+ \left|\E_{P_\pi}R^*-\E_{P_\pi}\hat R\right|
+ \le\epsilon\sqrt{\E_{P_0}w^2}
+ =\epsilon\sqrt{1+\chi^2(P_\pi\|P_0)}.
+\]
+For improvement relative to $P_0$, the error difference is bounded by
+$\epsilon\sqrt{\chi^2(P_\pi\|P_0)}$, using $w-1$.
+This is a standard change-of-measure calculation related to correlated-proxy
+regularization \cite{correlated}; it fails when relevant support is absent or
+the ratio is unbounded. Replacing whole trajectories by step occupancy needs
+consistent normalization and an additive reward objective.
+
+\subsection{Open theoretical targets}
+\begin{enumerate}
+\item \textbf{Geometry versus conservatism:} characterize regret or safe
+improvement for boxes versus shared ellipsoids at equal joint coverage, including
+correlated misspecification and variable-length reasoning. A dual-norm identity
+alone is insufficient novelty.
+\item \textbf{Coverage under specified optimization:} prove selected-trajectory
+coverage for a feasible protocol beyond naive $N T$ union bounds, explicitly
+comparing with JOMI and problem-block calibration. Specify the target and budget.
+\item \textbf{Necessity and lower bounds:} construct families where any narrow
+set calibrated only on a reference policy misses a reachable adversarial mode;
+state the needed overlap or complexity assumptions for informative protection.
+\item \textbf{Repair-aware process uncertainty:} characterize a set over validity
+transitions and show how robust outcome estimation differs from weakest-step
+scoring, comparing with RSP. This is more ambitious and needs reliable labels.
+\end{enumerate}
+A convergence theorem for a neural min--max method should not be asserted from
+convex-head or strongly monotone toy assumptions. Prove the restricted model
+first, and state the empirical extension separately.
+
+\section{An experiment plan that can support a paper}
+\label{sec:experiments}
+\subsection{Hypotheses and staged scope}
+\begin{description}
+\item[H1:] Static pointwise coverage degrades among PRM-selected candidates as
+search pressure increases.
+\item[H2:] A calibrated tube reduces false high-reward selections better than
+equal-cost pessimism, label improvement, or reduced search.
+\item[H3:] Coupling improves the coverage--sharpness--accuracy tradeoff when
+errors share structure, but can fail under unmodeled common bias.
+\item[H4:] Static calibration degrades under policy movement; independently
+audited updates recover useful coverage in specified regimes.
+\end{description}
+Begin with frozen-pool inference and a synthetic setting with known truth.
+Proceed to RL only if uncertainty is informative and an overoptimization
+baseline can be reproduced. A pure empirical paper can stop at inference-time
+claims; it should not imply mitigation of RL hacking without RL experiments.
+
+\subsection{Data and split protocol}
+Use PRM800K or appropriate process training data for heads and adapters, with
+training, validation, calibration, and test splits separated by problem.
+All paraphrases, injected
+errors, sampled solutions, and prefixes of a problem belong to one split.
+Use ProcessBench, PRMBench, and Socratic-PRMBench as independent diagnostic
+benchmarks; do not train a calibrator on their final evaluation labels.
+
+For answer evaluation, generate trajectories on held-out MATH-family problems,
+with GSM-style tasks as a second difficulty regime. Small AIME sets are a
+stress test with wide uncertainty, not the sole source of statistical claims.
+If a published baseline calibrates on MATH500, make that data use explicit and
+evaluate on a distinct held-out set. Check upstream training contamination where
+possible, and qualify residual uncertainty.
+
+Use at least two generator sizes or families and at least two PRM families,
+such as Qwen2.5-Math-PRM and Skywork-o1 PRMs as documented in the cited work.
+These are reproducibility candidates, not claims about the latest model releases.
+Verify model revisions and inference interfaces before running experiments.
+
+\subsection{Baselines and ablations}
+\begin{longtable}{p{0.32\linewidth}p{0.59\linewidth}}
+\toprule Comparator & Confound it addresses \\
+\midrule\endhead
+Nominal single PRM; calibrated center & Is the benefit better point predictions? \\
+Mean, minimum, and variance-penalized ensembles & Standard reward pessimism \\
+AdvPO-style frozen-head confidence score & Existing confidence-region optimization \\
+Quantile PRM; conditional-OT calibration & Existing prefix uncertainty modeling \\
+Caution novelty penalty & Single-model OOD conservatism \\
+PURE-style minimum; sum/mean/product controls & Credit assignment versus uncertainty \\
+Reduced $N$, early stopping, and KL sweep & Less optimization versus a better reward \\
+Length correction and hard-negative retraining & Bias correction and improved labels \\
+Box versus coupled tube; calibrated versus tuned radius & Geometry and calibration \\
+Pointwise, block, union-bound, selection-conditional variants & What survives selection \\
+Random widths; constant widths; oracle error widths & Whether width identifies errors \\
+Reliable outcome-only RLVR; hybrid rewards & Whether a PRM improves a reliable task signal \\
+\bottomrule
+\end{longtable}
+A full factorial is expensive. Predefine a core set containing nominal,
+calibrated-center, ensemble pessimism, AdvPO, one PRM calibration method, Caution,
+and the proposed tube; use targeted secondary ablations. Match center quality,
+training labels, total generation/scoring cost, and where relevant measured KL.
+Radius must be calibrated on calibration data or tuned on validation, never on
+the test set. Report those variants separately.
+
+\subsection{Optimization stress tests}
+For frozen candidates, sweep $N\in\{1,4,16,64,256\}$, subject to a common token
+budget, scoring nested candidate pools. Report both equal-$N$ and equal-compute
+comparisons. Test step splitting/merging, repetition, neutral padding, incorrect
+numeric transformations, unsupported premises, prompt mismatch, suffix attacks,
+and delimiter manipulation. Validate whether each edit preserves or changes
+correctness, and keep an untouched transfer family.
+
+For RL, freeze a reward model and tube during each comparison run. Use equal
+initial policies, prompts, token caps, training compute, and KL coefficients;
+add a matched-observed-KL analysis because penalties can change policy movement.
+The primary controlled comparison assigns the same trajectory aggregation to
+nominal and robust rewards. Compare process-only and hybrid-outcome supervision
+separately. A maximum-empty-response score is a parser defect to fix and report,
+not a gain to accept. Save checkpoints and raw rewards before normalization.
+
+Attack the deployed robust score, including its uncertainty head. A defense that
+works only against attacks optimized for $\hat r$ may simply move the exploit to
+$\hat r-b$. Black-box search and white-box token attacks are separate budgets;
+report access assumptions, calls, failed attempts, and transfer results.
+
+\subsection{Metrics and statistical reporting}
+The primary metric is held-out answer correctness under increasing pressure,
+supplemented by independent process validity on a stratified audit subset.
+Use answer checkers with canonicalization and spot checks; do not call a larger
+LLM an exact oracle. Score trajectories with correct answers but flawed processes
+as a separate category.
+
+Report step, trajectory, candidate-pool, and selected-trajectory coverage;
+interval width and singleton/abstention rates; false acceptance of invalid steps;
+overestimation error among top-scoring candidates; reward--accuracy curves; length,
+repetition, vacuity, KL, and compute. For bounded aligned utilities, also report
+lower-bound violations $(L-R^*)_+$ and their tail severity. Do not subtract an
+uncalibrated free scalar reward from a binary accuracy metric and interpret the
+result as a meaningful numerical ``hacking gap.''
+
+Use paired candidate pools, multiple independent head/policy seeds, and
+problem-level bootstrap confidence intervals. A starting plan is at least three
+seeds for expensive RL and five for lightweight methods; justify additional runs
+from variance and a pilot power analysis. Resampling individual steps as if
+independent understates uncertainty. Report all prespecified pressure levels,
+including unsuccessful conditions. Specify checkpoints by validation or fixed
+training budget, never retrospective test accuracy.
+
+\subsection{Synthetic experiments with known ground truth}
+Build finite reasoning trees with known validity labels and optional repair
+transitions. Expose features containing a true validity signal and spurious
+style dimensions. Vary reference-policy coverage, shared versus independent
+reward error, trajectory length, repair rate, and optimization budget. Compare
+nominal search/RL, boxes, ellipsoids, bias sets, and oracle bounds. This identifies
+when the set really contains truth and when apparent conservatism only shrinks
+optimization. Synthetic results validate assumptions, not realistic LLM claims.
+
+\section{Recommended route and publication decision gates}
+\begin{longtable}{p{0.15\linewidth}p{0.37\linewidth}p{0.39\linewidth}}
+\toprule Route & Minimum convincing result & Main limitation \\
+\midrule\endhead
+Empirical & Selected-path coverage failures plus a useful, equal-cost repair on
+multiple PRMs and pressure regimes & Prediction sets may be too wide; no RL
+claim without RL evidence \\
+Theoretical & A process-specific coverage/regret or impossibility result beyond
+standard confidence-set lemmas & Strong feature/support assumptions may limit
+practical implications \\
+Combined & A restricted theorem, informative real-PRM tubes, and adaptation-aware
+stress tests that match the theorem's mechanism & Highest label and training cost \\
+\bottomrule
+\end{longtable}
+
+\textbf{Recommended starting point:} Approach A as a diagnostic and calibrated
+baseline, Approach B as the structured candidate method, and synthetic tests to
+separate shared uncertainty from pointwise errors. Add a misspecification term
+from Approach C only when common-mode failures are observed. Approach E is the
+RL extension; Approach D is a later alternative, not a prerequisite.
+
+\begin{enumerate}
+\item \textbf{Target gate:} a label and reward definition must be coherent.
+If success-probability bounds are the only informative ones, narrow the claim to
+that target instead of calling them correctness bounds.
+\item \textbf{Information gate:} uncertainty must predict overestimation or
+useful abstention better than constant/random widths. Otherwise improve the
+representation or report why this uncertainty signal fails.
+\item \textbf{Mechanism gate:} show gains at fixed aggregation and comparable
+compute/optimization pressure. If reduced search explains the effect, do not
+claim a stronger reward estimator.
+\item \textbf{Prior-work gate:} compare explicitly with AdvPO, PRM quantile/OT
+calibration, ensemble pessimism, Caution, and selection-aware inference. Update
+the novelty search before drafting a submission.
+\item \textbf{Robustness gate:} test adaptive attacks and held-out families. If
+calibration fails under RL, retain an honest inference-only result or study the
+failure as the main contribution.
+\end{enumerate}
+The immediate deliverable is a research design, not an experiment result or a
+guarantee of publication. A well-supported negative finding about tube coverage
+may also be valuable, provided it is broad, controlled, and explains a mechanism
+that existing uncertainty methods miss.

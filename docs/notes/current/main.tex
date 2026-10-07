@@ -1,0 +1,55 @@
+\documentclass[11pt]{article}
+\PassOptionsToPackage{nopatch=footnote}{microtype}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm}
+\usepackage{booktabs,array,longtable,enumitem,xcolor,graphicx}
+\usepackage{hyperref,titlesec,setspace,microtype,tikz}
+\usetikzlibrary{arrows.meta}
+\setstretch{1.08}
+\setlist{topsep=3pt,itemsep=3pt}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue,
+ pdftitle={Uncertainty Sets for Robust Process Rewards: Research Notes}}
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\ind}{\mathbf{1}}
+\newcommand{\KL}{D_{\mathrm{KL}}}
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\clip}{\operatorname{clip}}
+\newcommand{\sigmoid}{\operatorname{sigmoid}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\paper}[2]{\paragraph{#1.} #2}
+\newtheorem{proposition}{Proposition}
+\newtheorem{definition}{Definition}
+\title{\textbf{Uncertainty Sets for Robust Process Rewards}\\
+\large Updated Lit Review, Foundations, and Approaches}
+\author{Jonathan Ma}
+\date{October 7, 2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+We would like to investigate whether an uncertainty set around a learned process reward
+can reduce reward hacking under inference-time search or reinforcement learning.
+The challenge is to cover relevant reward errors after optimization while
+retaining useful discrimination between reasoning paths. These notes distinguish
+established findings from proposed methods, identify close prior work, explain
+the necessary foundations, and specify possible empirical and theoretical approaches.
+\end{abstract}
+\tableofcontents
+\clearpage
+\part{Literature Review}
+\input{literature}
+\clearpage
+\part{Notes: Foundations for the Project}
+\input{foundations}
+\clearpage
+\part{Constructing and Characterizing the Reward Tube}
+\input{approaches}
+\clearpage
+\addcontentsline{toc}{section}{References}
+\input{references}
+\end{document}
